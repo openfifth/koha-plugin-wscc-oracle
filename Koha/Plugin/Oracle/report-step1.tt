@@ -5,7 +5,7 @@
 [% SET footerjs = 1 %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>[% FILTER collapse %]
-    [% t("RBKC Oracle") | html %] &rsaquo;
+    [% t("WSCC Oracle") | html %] &rsaquo;
     [% t("Plugins") | html %] &rsaquo;
     [% t("Koha") | html %]
 [% END %]</title>
@@ -24,7 +24,7 @@
             <a href="/cgi-bin/koha/reports/reports-home.pl">Reports</a>
         [% END %]
         [% WRAPPER breadcrumb_item bc_active= 1 %]
-            <span>RBKC Oracle</span>
+            <span>WSCC Oracle</span>
         [% END %]
     [% END #/ WRAPPER breadcrumbs %]
 [% END #/ WRAPPER sub-header.inc %]
@@ -54,6 +54,13 @@
                     <fieldset class="rows">
 						<legend>Output</legend>
 						<ol>
+                            <li>
+                                <label for="type">Report type:</label>
+                                <select name="type">
+                                    <option value="invoices">Invoices</option>
+                                    <option value="income">Income</option>
+                                </select>
+                            </li>
                             <li>
                                 <label for="output">Output Data to:</label>
                                 <select name="output">

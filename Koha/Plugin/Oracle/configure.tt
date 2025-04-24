@@ -5,7 +5,7 @@
 [% SET footerjs = 1 %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>[% FILTER collapse %]
-    [% t("RBKC Oracle") | html %] &rsaquo;
+    [% t("WSCC Oracle") | html %] &rsaquo;
     [% t("Plugins") | html %] &rsaquo;
     [% t("Koha") | html %]
 [% END %]</title>
@@ -24,7 +24,7 @@
             <a href="/cgi-bin/koha/plugins/plugins-home.pl?method=report">Plugins</a>
         [% END %]
         [% WRAPPER breadcrumb_item %]
-            <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report">RBKC Oracle</a>
+            <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report">WSCC Oracle</a>
         [% END %]
         [% WRAPPER breadcrumb_item bc_active= 1 %]
             <span>Configuration</span>

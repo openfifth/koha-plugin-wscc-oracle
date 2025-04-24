@@ -1,0 +1,129 @@
+extra_code,incomecode,financecode,description, cost,vatcode
+,8623,CREDIT,Borrower Account Credit,,O
+,8623,ELECTPRT,Computer Printing, £ -   ,S
+,8623,OVUNDER,Deficit/Surplus,,O
+,8191,DONATIONS,Donations, £ -   ,O
+,8623,EVENTS,Event tickets, £ -   ,S
+,8623,EXHIBITION,Exhibition Booking Fee, £ 15.50 ,E
+RQ32,8353,GREETINGS-B,Greetings Cards - B, £ 3.30 ,S
+RQ32,8353,GREETINGS-D,Greetings Cards - D, £ 2.60 ,S
+RQ32,8353,GREETINGS-DD,Greetings Cards - DD, £ 1.20 ,S
+RQ32,8353,GREETINGS-EE,Greetings Cards - EE, £ 1.30 ,S
+RQ32,8353,GREETINGS-F,Greetings Cards - F, £ 1.60 ,S
+RQ32,8353,GREETINGS-FF,Greetings Cards - FF, £ 1.60 ,S
+RQ32,8353,GREETINGS-G,Greetings Cards - G, £ 2.50 ,S
+RQ32,8353,GREETINGS-GG,Greetings Cards - GG, £ 1.90 ,S
+RQ32,8353,GREETINGS-GH,Greetings Cards - GH, £ 2.00 ,S
+RQ32,8353,GREETINGS-H,Greetings Cards - H, £ 2.00 ,S
+RQ32,8353,GREETINGS-HH,Greetings Cards - HH, £ 2.00 ,S
+RQ32,8353,GREETINGS-HI,Greetings Cards - HI, £ 2.25 ,S
+RQ32,8353,GREETINGS-II,Greetings Cards - II, £ 2.50 ,S
+RQ32,8353,GREETINGS-IJ,Greetings Cards - IJ, £ 2.60 ,S
+RQ32,8353,GREETINGS-JJ,Greetings Cards - JJ, £ 2.70 ,S
+RQ32,8353,GREETINGS-K,Greetings Cards - K, £ 2.25 ,S
+RQ32,8353,GREETINGS-LL,Greetings Cards - LL, £ 3.00 ,S
+RQ32,8353,GREETINGS-MM,Greetings Cards - MM, £ 3.40 ,S
+RQ32,8353,GREETINGS-P,Greetings Cards - P, £ 2.70 ,S
+RQ32,8353,GREETINGS-QKK,Greetings Cards - Q/KK, £ 2.90 ,S
+RQ32,8353,GREETINGS-S,Greetings Cards - S, £ 2.00 ,S
+RQ32,8353,GREETINGS,Greetings Cards: Alan Nicholls, £ 2.20 ,S
+RQ32,8353,GREETINGS,Greetings Cards: Andrew Dandridge, £ 1.40 ,S
+RQ32,8353,GREETINGS,Greetings Cards: CFGC Bumper Pack, £ 9.99 ,S
+RQ32,8353,GREETINGS,Greetings Cards: CFGC Standard Pack, £ 4.99 ,S
+RQ32,8353,GREETINGS,Greetings Cards: Cherry Parsons, £ 3.00 ,S
+RQ32,8353,GREETINGS,Greetings Cards: Christmas C, £ 3.99 ,S
+RQ32,8353,GREETINGS,Greetings Cards: Dry Red Press, £ 2.50 ,S
+RQ32,8353,GREETINGS,Greetings Cards: Helen Budgen, £ 2.25 ,S
+RQ32,8353,GREETINGS,Greetings Cards: Julian Perry, £ 2.50 ,S
+RQ32,8353,GREETINGS,Greetings Cards: Leftovers, £ 1.00 ,S
+RQ32,8353,GREETINGS,Greetings Cards: Peter Iden Large, £ 2.50 ,S
+RQ32,8353,GREETINGS,Greetings Cards: Pulborough Society, £ 1.25 ,S
+,8506,INTERNETHRLY,Internet charge: hourly fee, £ 2.30 ,S
+,8623,JACKETING,Jackets and jacketing service, £ 1.00 ,S
+,8623,LAMINATION,Lamination service, £ -   ,S
+,8505,SPOKLOAN,Loan charge: Audiobook cass (1-8), £ 1.55 ,O
+,8505,SPOKLOAN,Loan charge: Audiobook cass (9+), £ 3.10 ,O
+,8505,AUDIOLOAN1,Loan charge: Audiobook on CD (1-8), £ 1.55 ,O
+,8505,AUDIOLOAN9,Loan charge: Audiobook on CD (9+), £ 3.10 ,O
+,8505,DIGAUDIOLOAN,Loan charge: Digital audiobook (Playaway), £ 3.10 ,O
+,8504,DVDLOAN,Loan charge: DVD, £ 2.25 ,O
+,8503,CDLOAN,Loan charge: Music CD, £ 1.55 ,O
+,8623,LOSSADMIN,Lost or damaged admin. charge, £ 2.10 ,O
+,8623,LOSSREPLACE,Lost or damaged replacement costs, £ -   ,O
+RQ30,8353,3DBOOKMARKS,Merchandise: 3D Bookmarks, £ 1.00 ,S
+,8353,ACTIVITYBOOK,Merchandise: Activity book, £ 1.50 ,E
+RQ30,8353,BAGABOOK,Merchandise: Bag - Eco Chic, £ 4.99 ,S
+RQ30,8353,BAGABOOK,Merchandise: Bag - Go Away I'm Reading, £ 4.99 ,S
+RQ30,8353,BAGABOOK,Merchandise: Bag - Love your Local Library, £ 4.99 ,S
+RQ30,8353,BAGABOOK,Merchandise: Bag - My Ideal Library, £ 7.99 ,S
+,8353,HEADPHONES,Merchandise: Headphones, £ 1.05 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Book Fan, £ 4.50 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Bookholder, £ 5.50 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Bookmark - 50 Books, £ 3.00 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Bookmark - Book Tails, £ 4.99 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Bookmark - Dog Ear, £ 2.99 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Bookmark - Mr Men, £ 2.99 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Bookmark - Page Pointers, £ 3.50 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Bookmark - Seuss/Walliams, £ 2.29 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Bookmark - V&A, £ 2.99 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Little Book Holder, £ 2.99 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Magnif-i - credit card, £ 2.49 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Magnif-i - magnifying sheets, £ 3.49 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Magnif-i - pocket lighted LED, £ 6.25 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Notepad - Bookaroo A5, £ 5.99 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Page Markers - Tin of Sardines, £ 4.99 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Pop up book end, £ 4.99 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Teeth Marks, £ 4.99 ,S
+RQ30,8353,IFPRODUCTS,Merchandise: IF products - Tiny Booklight, £ 5.99 ,S
+,8353,MEMORYSTICK,Merchandise: Magnifying Sheets/Bookmarks, £ 2.50 ,S
+,8353,MEMORYSTICK,Merchandise: Memory Stick, £ 8.00 ,S
+RQ30,8353,FLOPPYDISK,Merchandise: Miscellaneous - Height Chart, £ 5.50 ,S
+RQ30,8353,FLOPPYDISK,Merchandise: Miscellaneous - Jigsaw Puzzle, £ 14.99 ,S
+RQ30,8353,FLOPPYDISK,Merchandise: Miscellaneous - Mug - Go Away I'm Reading, £ 8.99 ,S
+RQ30,8353,STATIONERY,Merchandise: Stationery, £ -   ,S
+RQ30,8353,STATIONERY,"Merchandise: Stationery - Centenary: lined notebook (black), ", £ 4.99 ,S
+RQ30,8353,STATIONERY,"Merchandise: Stationery - Centenary: lined notebook (gold), 1", £ 4.99 ,S
+RQ30,8353,STATIONERY,"Merchandise: Stationery - Centenary: plain wiro notepad, Libr", £ 3.99 ,S
+RQ30,8353,STATIONERY,Merchandise: Stationery - Centenary: tote bag, £ 4.99 ,S
+RQ30,8353,STATIONERY,Merchandise: Stationery - Inspirational Quote Pen, £ 2.50 ,S
+RQ30,8353,STATIONERY,Merchandise: Stationery - Pencil People, £ 1.99 ,S
+RQ30,8353,STATIONERY,Merchandise: Stationery - Slant pads (Andrew Dandridge), £ 3.99 ,S
+RQ30,8353,STATIONERY,Merchandise: Stationery - Space Shuttle Set, £ 4.99 ,S
+RQ30,8353,STATIONERY,Merchandise: Stationery - Sticky Notes - Cat/Dog, £ 4.99 ,S
+RQ30,8353,STATIONERY,Merchandise: Stationery - Transparent Sticky Notes, £ 3.29 ,S
+,8353,WALLCHART,Merchandise: Wall charts, £ 1.50 ,S
+,8623,MISC,Miscellaneous Income,,S
+,8623,MISCNONVAT,Miscellaneous Income non VAT,,O
+,8501,FINES,Overdue charges (fines), £ -   ,O
+,8620,COURT,Overdue charges: Court costs, £ -   ,O
+,8501,FINES,Overdue charges: fallback charges, £ -   ,O
+,8507,PHOTOCOP,Photocopying, £ -   ,S
+,8623,LOCALPRINT,Printing: Local Society Printouts, £ -   ,S
+,8623,LOCALPRINT,Printing: Microprints, £ 0.25 ,S
+,8623,LOCALPUB,Publications for Sale: Books, £ -   ,Z
+,8623,READINGGR1,Reading Group - 1 year Jan-Dec, £ 38.00 ,S
+,8623,READINGGR3,Reading Group - 3 months Oct-Dec, £ 9.50 ,S
+,8623,READINGGR6,Reading Group - 6 months Jul-Dec, £ 19.00 ,S
+,8623,READINGGR9,Reading Group - 9 months Apr-Dec, £ 28.50 ,S
+,8623,REPTICK,Replacement Library Card, £ 2.10 ,O
+,8502,REQUEST,Reservation charges: request, £ 1.00 ,O
+,8502,REQUEST,Reservation charges: request British Library, £ 12.50 ,O
+,8502,REQUEST,Reservation charges: request British Library renewal, £ 6.25 ,O
+,8502,REQUEST,Reservation charges: request Inter-Library Loan (ILL), £ 7.75 ,O
+,8502,SELFBOOK,Reservation charges: request online (SELFBOOK),,O
+,8502,STAFFBOOK,Reservation charges: request via staff (SELFBOOK),,O
+,8461,ROOM,Room Hire - Group 1: Community, £ -   ,E
+,8461,ROOM,Room Hire - Group 2: Business, £ -   ,E
+,8461,ROOM,Room Hire - Group 3: Commercial, £ -   ,E
+,8461,ROOM,Room Hire - Pod 1: Large (8-seater), £ -   ,E
+,8461,ROOM,Room Hire - Pod 2: Small (3-seater), £ -   ,E
+,8461,ROOMVAT,Room Hire Including VAT - Group 1: Community, £ -   ,S
+,8461,ROOMVAT,Room Hire Including VAT - Group 2: Business, £ -   ,S
+,8461,ROOMVAT,Room Hire Including VAT - Group 3: Commercial, £ -   ,S
+,8461,ROOMINS,Room Hire Insurance,,E
+,8461,ROOMOOH,Room Hire Out of Hours Cover,,E
+RQ40,8623,SCHOOLSLIB,Schools Library Service, £ -   ,E
+,8623,PAYPHONE,Telephone charges, £ -   ,S
+,8350,A/V SALE,Withdrawn A/V for sale, £ -   ,S
+,8350,BOOKSALE,Withdrawn books for sale, £ -   ,Z
+,8623,POSURPLUS,Z: Post Office Surplus (ONLY USE IF ADVISED),,O

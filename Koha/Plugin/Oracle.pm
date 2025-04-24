@@ -6,12 +6,16 @@ use base            qw{ Koha::Plugins::Base };
 use Koha::DateUtils qw(dt_from_string);
 use Koha::File::Transports;
 use Koha::Number::Price;
+use Koha::Account::Lines;
 
 use File::Spec;
 use List::Util qw(min max);
 use Mojo::JSON qw{ decode_json };
+use Text::CSV  qw( csv );
+use C4::Context;
 
-our $VERSION  = '0.0.01';
+our $VERSION = '0.0.01';
+
 our $metadata = {
     name => 'Oracle Finance Integration',
 
@@ -19,7 +23,7 @@ our $metadata = {
     date_authored   => '2025-04-24',
     date_updated    => '2025-04-24',
     minimum_version => '24.11.00.000',
-    maximum_version => undef,
+    maximum_version => '24.11',
     version         => $VERSION,
     description     =>
       'A plugin to manage finance integration for WSCC with Oracle',
@@ -46,11 +50,12 @@ sub configure {
 
         ## Grab the values we already have for our settings, if any exist
         my $available_transports = Koha::File::Transports->search();
-        my @days_of_week = qw(sunday monday tuesday wednesday thursday friday saturday);
+        my @days_of_week =
+          qw(sunday monday tuesday wednesday thursday friday saturday);
         my $transport_days = {
-            map { $days_of_week[$_] => 1 }
+            map  { $days_of_week[$_] => 1 }
             grep { defined $days_of_week[$_] }
-            split(',', $self->retrieve_data('transport_days'))
+              split( ',', $self->retrieve_data('transport_days') )
         };
         $template->param(
             transport_server     => $self->retrieve_data('transport_server'),
@@ -64,7 +69,7 @@ sub configure {
     else {
         # Get selected days (returns an array from multiple checkboxes)
         my @selected_days = $cgi->multi_param('days');
-        my $days_str = join(',', sort { $a <=> $b } @selected_days);
+        my $days_str      = join( ',', sort { $a <=> $b } @selected_days );
         $self->store_data(
             {
                 transport_server => scalar $cgi->param('transport_server'),
@@ -78,12 +83,12 @@ sub configure {
 
 sub cronjob_nightly {
     my ($self) = @_;
-    
+
     my $transport_days = $self->retrieve_data('transport_days');
     return unless $transport_days;
 
     my @selected_days = sort { $a <=> $b } split( /,/, $transport_days );
-    my %selected_days = map { $_ => 1 } @selected_days;
+    my %selected_days = map  { $_ => 1 } @selected_days;
 
     # Get current day of the week (0=Sunday, ..., 6=Saturday)
     my $today = dt_from_string()->day_of_week % 7;
@@ -92,22 +97,26 @@ sub cronjob_nightly {
     my $output = $self->retrieve_data('output');
     my $transport;
     if ( $output eq 'upload' ) {
-        $transport = Koha::File::Transports->find($self->retrieve_data('transport_server'));
+        $transport = Koha::File::Transports->find(
+            $self->retrieve_data('transport_server') );
         return unless $transport;
     }
 
     # Find start date (previous selected day) and end date (today)
-    my $previous_day = max(grep { $_ < $today } @selected_days);  # Last selected before today
-    $previous_day //= $selected_days[-1]; # Wrap around to last one from previous week
+    my $previous_day =
+      max( grep { $_ < $today } @selected_days );   # Last selected before today
+    $previous_day //=
+      $selected_days[-1];    # Wrap around to last one from previous week
 
     # Calculate the start date (previous selected day) and end date (today)
     my $now = DateTime->now;
-    my $start_date = $now->clone->subtract(days => ($today - $previous_day) % 7);
-    my $end_date   = $now;
+    my $start_date =
+      $now->clone->subtract( days => ( $today - $previous_day ) % 7 );
+    my $end_date = $now;
 
-    my $report = $self->_generate_report( $start_date, $end_date );
+    my $filename = $self->_generate_filename();
+    my $report   = $self->_generate_report( $start_date, $end_date, $filename );
     if ($report) {
-        my $filename = $self->_generate_filename();
 
         if ( $output eq 'upload' ) {
             $transport->connect;
@@ -152,8 +161,12 @@ sub report_step1 {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
 
-    my $startdate = $cgi->param('startdate') ? dt_from_string($cgi->param('startdate')) : undef;
-    my $enddate   = $cgi->param('enddate') ? dt_from_string($cgi->param('enddate')) : undef;
+    my $startdate =
+      $cgi->param('startdate')
+      ? dt_from_string( $cgi->param('startdate') )
+      : undef;
+    my $enddate =
+      $cgi->param('enddate') ? dt_from_string( $cgi->param('enddate') ) : undef;
 
     my $template = $self->get_template( { file => 'report-step1.tt' } );
     $template->param(
@@ -167,9 +180,10 @@ sub report_step1 {
 sub report_step2 {
     my ( $self, $args ) = @_;
 
-    my $cgi = $self->{'cgi'};
+    my $cgi       = $self->{'cgi'};
     my $startdate = $cgi->param('from');
     my $enddate   = $cgi->param('to');
+    my $type      = $cgi->param('type');
     my $output    = $cgi->param('output');
 
     if ($startdate) {
@@ -184,11 +198,12 @@ sub report_step2 {
         $enddate = eval { dt_from_string($enddate) };
     }
 
-    my $results = $self->_generate_report($startdate, $enddate);
+    my $filename = $self->_generate_filename($type);
+    my $results =
+      $self->_generate_report( $startdate, $enddate, $type, $filename );
 
     my $templatefile;
     if ( $output eq "txt" ) {
-        my $filename = $self->_generate_filename;
         print $cgi->header( -attachment => "$filename" );
         $templatefile = 'report-step2-txt.tt';
     }
@@ -210,11 +225,32 @@ sub report_step2 {
 }
 
 sub _generate_report {
-    my ( $self, $startdate, $enddate ) = @_;
+    my ( $self, $startdate, $enddate, $type, $filename ) = @_;
+    if ( $type eq 'income' ) {
+        return $self->_generate_income_report( $startdate, $enddate,
+            $filename );
+    }
+    elsif ( $type eq 'invoices' ) {
+        return $self->_generate_invoices_report( $startdate, $enddate,
+            $filename );
+    }
+}
 
-    my $dbh   = C4::Context->dbh;
-    my $where = { 'booksellerid.name' => { 'LIKE' => 'RBKC%' } };
+sub _generate_invoices_report {
+    my ( $self, $startdate, $enddate, $filename ) = @_;
 
+    my $csv = Text::CSV->new(
+        {
+            binary     => 1,
+            eol        => "\015\012",
+            sep_char   => "|",
+            quote_char => '"'
+        }
+    );
+
+    ( my $filename_no_ext = $filename ) =~ s/\.csv$//;
+
+    my $where         = {};
     my $dtf           = Koha::Database->new->schema->storage->datetime_parser;
     my $startdate_iso = $dtf->format_date($startdate);
     my $enddate_iso   = $dtf->format_date($enddate);
@@ -234,170 +270,461 @@ sub _generate_report {
 
     my $results;
     my $invoice_count = 0;
-    my $overall_total = 0;
 
     if ( $invoices->count ) {
         $results = "";
+        open my $fh, '>', \$results or die "Could not open scalar ref: $!";
+
         while ( my $invoice = $invoices->next ) {
             $invoice_count++;
-            my $lines  = "";
-            my $orders = $invoice->_result->aqorders;
-    
-            # Collect 'General Ledger lines'
             my $invoice_total = 0;
-            my $tax_amount = 0;
-            my $suppliernumber;
-            my $costcenter;
+            my $orders        = $invoice->_result->aqorders;
+
+            # Calculate invoice total first
+            my @orderlines;
+            my $line_count = 0;
             while ( my $line = $orders->next ) {
-                my $unitprice = Koha::Number::Price->new( $line->unitprice )->round * 100;
-                $invoice_total = $invoice_total + $unitprice;
-                my $tax_value_on_receiving = Koha::Number::Price->new( $line->tax_value_on_receiving )->round * 100;
-                $tax_amount = $tax_amount + $tax_value_on_receiving;
+                $line_count++;
+
+                # Unit price
+                my $unitprice =
+                  Koha::Number::Price->new( $line->unitprice )->round * 100;
+                my $quantity = $line->quantity || 1;
+                $invoice_total += ( $unitprice * $quantity );
+
+                # Tax
+                my $tax_value_on_receiving =
+                  Koha::Number::Price->new( $line->tax_value_on_receiving )
+                  ->round * 100;
                 my $tax_rate_on_receiving = $line->tax_rate_on_receiving * 100;
                 my $tax_code =
-                    $tax_rate_on_receiving == 20 ? 'P1'
-                  : $tax_rate_on_receiving == 5  ? 'P2'
-                  : $tax_rate_on_receiving == 0  ? 'P3'
-                  :                                '';
-                $lines .= "GL" . ","
-                  . $self->_map_fund_to_suppliernumber($line->budget->budget_code) . ","
-                  . $invoice->invoicenumber . ","
-                  . $unitprice . ","
-                  . ","
-                  . $tax_code . ","
-                  . ","
-                  . ","
-                  . ","
-                  . "Statistical" . ","
-                  . ","
-                  . $self->_map_fund_to_costcenter($line->budget->budget_code) . ","
-                  . $invoice->invoicenumber . ","
-                  . ","
-                  . ","
-                  . ","
-                  . ","
-                  . ","
-                  . ","
-                  . ","
-                  . ","
-                  . ","
-                  . ","
-                  . "\n";
-    
-                $suppliernumber = $self->_map_fund_to_suppliernumber($line->budget->budget_code);
-                $costcenter = $self->_map_fund_to_costcenter($line->budget->budget_code);
-            }
-    
-            # Add 'Accounts Payable line'
-            $invoice_total = $invoice_total * -1;
-            $overall_total = $overall_total + $invoice_total;
-            $results .= "AP" . ","
-              . $invoice->_result->booksellerid->accountnumber . ","
-              . $invoice->invoicenumber . ","
-              . ( $invoice->closedate =~ s/-//gr ) . ","
-              . $invoice_total . ","
-              . $tax_amount . ","
-              . $invoice->invoicenumber . ","
-              . ( $invoice->shipmentdate =~ s/-//gr ) . ","
-              . $costcenter . ","
-              . $suppliernumber . ","
-              . ","
-              . ","
-              . $invoice->_result->booksellerid->invoiceprice->currency . ","
-              . ","
-              . ","
-              . ","
-              . ","
-              . ","
-              . ","
-              . ","
-              . ","
-              . ","
-              . ","
-              . $invoice->_result->booksellerid->fax
-              . "\n";
-            $results .= $lines;
-        }
-    
-        # Add 'Control Total line'
-        $overall_total = $overall_total * -1;
-        $results = "CT" . ","
-          . $invoice_count . ","
-          . $overall_total . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . ","
-          . "\n"
-          . $results;
-      }
+                    $tax_rate_on_receiving == 20 ? 'STANDARD'
+                  : $tax_rate_on_receiving == 0  ? 'ZERO'
+                  :                                '*UNMAPPED*';
 
-      return $results;
+                # Get budget code for mappings
+                my $budget_code = $line->budget->budget_code;
+
+                # Get item description (fallback to generic if not available)
+                my $description = "Library Materials";
+                if ( my $biblio = $line->biblio ) {
+                    $description = $biblio->title || $description;
+                }
+
+                # Build line records
+                for my $qty_unit ( 1 .. $quantity ) {
+                    push @orderlines, [
+                        sprintf( "%04d", $invoice_count ),    # Invoice ID
+                        $line_count,                          # Line Number
+                        "ITEM",                               # Line Type
+                        $unitprice,                           # Amount
+                        $description,                         # Description
+                        $self->_get_acquisitions_distribution($budget_code)
+                        ,                        # Distribution Combination
+                        $tax_code,               # Tax Classification Code
+                        $tax_value_on_receiving, # Tax Control Amount
+                        "N",                     # Prorate Across All Item Lines
+                        "WSCC Library",          # Attribute Category
+                        $invoice->invoicenumber  # Attribute1
+                    ];
+                }
+            }
+
+# Get supplier number for first order (assuming all orders in invoice have same supplier)
+            my $first_order     = $invoice->_result->aqorders->first;
+            my $supplier_number = "";
+            if ($first_order) {
+                $supplier_number = $self->_map_fund_to_suppliernumber(
+                    $first_order->budget->budget_code );
+            }
+
+            # Make invoice total negative for AP
+            $invoice_total *= -1;
+
+            # Build header record according to Oracle spec (23 fields)
+            $csv->print(
+                $fh,
+                [
+                    sprintf( "%04d", $invoice_count ),    # Invoice ID
+                    "West Sussex County Council BU",      # Business Unit
+                    "KOHA",                               # Source
+                    $invoice->invoicenumber,              # Invoice Number
+                    $invoice_total,                       # Invoice Amount
+                    $self->_format_oracle_date( $invoice->closedate )
+                    ,                                     # Invoice Date
+                    "",                                   # Supplier Name
+                    $supplier_number,                     # Supplier Number
+                    "",                                   # Supplier Site
+                    "GBP",                                # Invoice Currency
+                    "GBP",                                # Payment Currency
+                    "Libraries",                          # Description
+                    $filename_no_ext,                     # Import Set
+                    ( $invoice_total >= 0 ? "STANDARD" : "CREDIT" )
+                    ,                                     # Invoice Type
+                    "West Sussex County Council",         # Legal Entity
+                    "",                                   # Payment Terms
+                    $self->_format_oracle_date( $invoice->shipmentdate )
+                    ,               # Invoice Received Date
+                    "*SYSDATE*",    # Accounting Date
+                    "",             # Payment Method
+                    "N",            # Pay Group
+                    "N",            # Pay Alone
+                    "N",            # Calculate Tax During Import
+                    "N"             # Add Tax to Invoice Amount
+                ]
+            );
+
+            # Print all line records for this invoice
+            for my $line (@orderlines) {
+                $csv->print( $fh, $line );
+            }
+        }
+
+        close $fh;
+    }
+
+    return $results;
+}
+
+sub _get_acquisitions_costcenter {
+    my ($self) = @_;
+
+    # Cost Center = RN05 for all acquisitions
+    return "RN05";
+}
+
+sub _get_acquisitions_objective {
+    my ($self) = @_;
+
+    # Default objective for all funds
+    return "ZZZ999";
+}
+
+sub _get_acquisitions_subjective {
+    my ($self) = @_;
+
+    # Default subjective for all funds
+    return "503000";
+}
+
+# FIXME: Need a mapping for where subanalysis will come from in Koha, this is just a placehold stub
+sub _get_acquisitions_subanalysis {
+    my ( $self, $fund ) = @_;
+    my $map = {
+        KAFI   => "5460",    # Fiction
+        KANF   => "5461",    # Non-Fiction
+        KARC   => "5462",    # Archive
+        KBAS   => "5463",    # Basic
+        KCFI   => "5464",    # Children Fiction
+        KCHG   => "5465",    # Children General
+        KCNF   => "5466",    # Children Non-Fiction
+        KCOM   => "5467",    # Computing
+        KEBE   => "5468",    # E-Books
+        KELE   => "5469",    # Electronic
+        KERE   => "5470",    # Reference
+        KFSO   => "5471",    # Fiction Standing Order
+        KHLS   => "5472",    # Health
+        KLPR   => "5473",    # Large Print
+        KNHC   => "5474",    # National Heritage Collection
+        KNSO   => "5475",    # Non-Fiction Standing Order
+        KPER   => "5476",    # Periodicals
+        KRCHI  => "5477",    # Reference Children
+        KREF   => "5478",    # Reference
+        KREFSO => "5479",    # Reference Standing Order
+        KREP   => "5480",    # Replacement
+        KREQ   => "5481",    # Request
+        KRFI   => "5482",    # Reference Fiction
+        KRNF   => "5483",    # Reference Non-Fiction
+        KSPO   => "5484",    # Sport
+        KSSS   => "5485",    # Stock Selection Service
+        KVAT   => "5486",    # VAT
+        KYAD   => "5487",    # Young Adult
+    };
+    my $return = defined( $map->{$fund} ) ? $map->{$fund} : '5999';
+    return $return;
+}
+
+sub _get_acquisitions_distribution {
+    my ( $self, $fund ) = @_;
+    my $company     = "1000";    # Default company code
+    my $costcenter  = $self->_get_acquisitions_costcenter();
+    my $objective   = $self->_get_acquisitions_objective();
+    my $subjective  = $self->_get_acquisitions_subjective();
+    my $subanalysis = $self->_get_acquisitions_subanalysis($fund);
+    my $spare1      = "000000";
+    my $spare2      = "000000";
+
+    return
+"$company-$costcenter-$objective-$subjective-$subanalysis-$spare1-$spare2";
+}
+
+sub _generate_income_report {
+    my ( $self, $startdate, $enddate, $filename ) = @_;
+
+    # Use pipe delimiter for income reports as specified
+    my $csv = Text::CSV->new(
+        {
+            binary     => 1,
+            eol        => "\015\012",
+            sep_char   => "|",
+            quote_char => '"'
+        }
+    );
+
+    ( my $filename_no_ext = $filename ) =~ s/\.csv$//;
+
+    # Build search criteria for positive credits, excluding Pay360 payments
+    my $where = {
+        'amount'           => { '>', 0 },
+        'credit_type_code' => { '!=' => undef },
+        'description' => { 'NOT LIKE' => '%Pay360%' }  # Exclude Pay360 payments
+    };
+
+    # Add date filtering using formatted timestamps
+    my $dtf = Koha::Database->new->schema->storage->datetime_parser;
+    if ( $startdate && $enddate ) {
+        my $start_dt =
+          $startdate->clone->set( hour => 0, minute => 0, second => 0 );
+        my $end_dt =
+          $enddate->clone->set( hour => 23, minute => 59, second => 59 );
+        $where->{'timestamp'} = [
+            -and => { '>=', $dtf->format_datetime($start_dt) },
+            { '<=', $dtf->format_datetime($end_dt) }
+        ];
+    }
+    elsif ($startdate) {
+        my $start_dt =
+          $startdate->clone->set( hour => 0, minute => 0, second => 0 );
+        $where->{'timestamp'} = { '>=', $dtf->format_datetime($start_dt) };
+    }
+    elsif ($enddate) {
+        my $end_dt =
+          $enddate->clone->set( hour => 23, minute => 59, second => 59 );
+        $where->{'timestamp'} = { '<=', $dtf->format_datetime($end_dt) };
+    }
+
+    # Search using Koha::Account::Lines and group for aggregation
+    my $account_lines = Koha::Account::Lines->search(
+        $where,
+        {
+            order_by => [ 'timestamp', 'accountlines_id' ]
+        }
+    );
+
+# Aggregate data: sum transactions per library per item type per receipt type per day
+    my %aggregated_data;
+
+    while ( my $account_line = $account_lines->next ) {
+        my $date        = dt_from_string( $account_line->timestamp )->ymd;
+        my $library     = $account_line->branchcode || 'UNKNOWN';
+        my $credit_type = $account_line->credit_type_code;
+
+        # Get item type from debit type additional fields
+        my $item_type = $self->_get_item_type_from_debit_type($credit_type);
+
+        # Map credit type to payment type (CASH, CARD KIOSK, CARD TERMINAL)
+        my $payment_type =
+          $self->_map_credit_type_to_payment_type($credit_type);
+
+        # Create aggregation key
+        my $key = "$library|$item_type|$payment_type|$date";
+
+        # Aggregate amounts
+        $aggregated_data{$key} = {
+            library      => $library,
+            item_type    => $item_type,
+            payment_type => $payment_type,
+            date         => $date,
+            total_amount => ( $aggregated_data{$key}->{total_amount} || 0 ) +
+              $account_line->amount,
+            count => ( $aggregated_data{$key}->{count} || 0 ) + 1
+        };
+    }
+
+    my $results;
+    my $line_number = 1;
+
+    if (%aggregated_data) {
+        $results = "";
+        open my $fh, '>', \$results or die "Could not open scalar ref: $!";
+
+        # Sort aggregated data by date, library, item type, payment type
+        for my $key ( sort keys %aggregated_data ) {
+            my $data = $aggregated_data{$key};
+
+            my $amount_pence =
+              int( $data->{total_amount} * 100 );    # Convert to pence
+            next if $amount_pence <= 0;    # Skip zero or negative amounts
+
+            # Generate document reference based on aggregation
+            my $doc_reference = "AGG" . sprintf( "%06d", $line_number );
+
+            # Generate document description using new format
+            my $library_code = $data->{library};
+            my $doc_description =
+                dt_from_string( $data->{date} )->strftime('%d/%m/%y') . "-"
+              . $library_code
+              . "-LIB-Income";
+
+            # Get accounting date in Excel serial format
+            my $accounting_date = $self->_format_oracle_date( $data->{date} );
+
+            # Get GL code mappings using new requirements
+            my $cost_centre = "RN03";    # Always RN03 for libraries
+            my $objective   = $self->_get_income_objective( $data->{library} );
+            my $subjective =
+              $self->_get_item_type_subjective( $data->{item_type} );
+            my $subanalysis =
+              $self->_get_item_type_subanalysis( $data->{item_type} );
+
+            # Get offset fields
+            my $cost_centre_offset =
+              $self->_get_cost_centre_offset( $data->{item_type} );
+            my $objective_offset =
+              $self->_get_objective_offset( $data->{item_type} );
+            my $subjective_offset =
+              $self->_get_subjective_offset( $data->{item_type} );
+            my $subanalysis_offset =
+              $self->_get_subanalysis_offset( $data->{item_type} );
+
+            # Get VAT information using new codes
+            my $vat_code = $self->_get_item_type_vat_code( $data->{item_type} );
+            my $vat_amount =
+              $self->_calculate_vat_amount_new( $data->{total_amount},
+                $vat_code );
+
+            # Create line description in format: "[Payment Type] [Item Type]"
+            my $line_description =
+              $data->{payment_type} . " " . $data->{item_type};
+            $line_description =~ s/[|"]//g;   # Remove pipe and quote characters
+
+            # Build record according to new 19-field cash management spec
+            $csv->print(
+                $fh,
+                [
+                    $doc_reference,      # 1. D_Document Document Number
+                    $doc_description,    # 2. D_Document Description
+                    $accounting_date,    # 3. D_Document Date
+                    "",                  # 4. EMPTY
+                    $line_number,        # 5. D_Line Number
+                    $amount_pence,       # 6. D_Line Amount (positive, in pence)
+                    "",                  # 7. EMPTY
+                    $cost_centre,        # 8. D_Cost Centre
+                    $objective,          # 9. D_Objective
+                    $subjective,         # 10. D_Subjective
+                    $subanalysis,        # 11. D_Subanalysis
+                    "",                  # 12. EMPTY
+                    $cost_centre_offset, # 13. D_Cost Centre Offset
+                    $objective_offset,   # 14. D_Objective Offset
+                    $subjective_offset,  # 15. D_Subjective Offset
+                    $subanalysis_offset, # 16. D_Subanalysis Offset
+                    $line_description,   # 17. D_Line Description
+                    $vat_code,           # 18. D_VAT Code
+                    $vat_amount          # 19. D_VAT Amount
+                ]
+            );
+
+            $line_number++;
+        }
+
+        close $fh;
+    }
+
+    return $results;
 }
 
 sub _generate_filename {
-    my ($self, $args) = @_;
+    my ( $self, $type ) = @_;
+    my $filename;
+    my $extension = '.csv';
 
-    my $filename = "KC_LB02_" . dt_from_string()->strftime('%Y%m%d%H%M%S');
-    my $extension = ".txt";
+    if ( $type eq 'invoices' ) {
+        $filename =
+          "KOHA_SaaS_APInvoice_" . dt_from_string()->strftime('%d%m%Y%H%M%S');
+    }
+    elsif ( $type eq 'income' ) {
+        $filename = "KOHA_SaaS_TaxableJournal_"
+          . dt_from_string()->strftime('%Y%m%d%H%M%S');
+    }
 
     return $filename . $extension;
 }
 
-sub _map_fund_to_costcenter {
-    my ($self, $fund) = @_;
-    my $map = {
-        KAFI   => "E26315",
-        KANF   => "E26315",
-        KARC   => "E26311",
-        KBAS   => "E26315",
-        KCFI   => "E26315",
-        KCHG   => "E26315",
-        KCNF   => "E26315",
-        KCOM   => "E26315",
-        KEBE   => "E26315",
-        KELE   => "E26315",
-        KERE   => "E26341",
-        KFSO   => "E26315",
-        KHLS   => "E26330",
-        KLPR   => "E26315",
-        KNHC   => "E26315",
-        KNSO   => "E26315",
-        KPER   => "E26315",
-        KRCHI  => "E26315",
-        KREF   => "E26315",
-        KREFSO => "E26315",
-        KREP   => "E26315",
-        KREQ   => "E26315",
-        KRFI   => "E26315",
-        KRNF   => "E26315",
-        KSPO   => "E26315",
-        KSSS   => "E26315",
-        KVAT   => "E26315",
-        KYAD   => "E26315",
+sub _map_income_type_to_cost_centre {
+    my ( $self, $credit_type, $branch ) = @_;
+
+    # Map library branches to cost centres
+    my $branch_map = {
+        'Angmering'      => "RG02",
+        'Arundel'        => "RG03",
+        'Billingshurst'  => "RE01",
+        'Bognor Regis'   => "RH00",
+        'Broadfield'     => "RA01",
+        'Broadwater'     => "RK01",
+        'Burgess Hill'   => "RD00",
+        'Chichester'     => "RJ00",
+        'Crawley'        => "RA00",
+        'Durrington'     => "RK02",
+        'East Grinstead' => "RB00",
+        'East Preston'   => "RG04",
+        'Ferring'        => "RG05",
+        'Findon Valley'  => "RK03",
+        'Goring'         => "RK04",
+        'Hassocks'       => "RD03",
+        'Haywards Heath' => "RD01",
+        'Henfield'       => "RD02",
+        'Horsham'        => "RC00",
+        'Hurstpierpoint' => "RD04",
+        'Lancing'        => "RF01",
+        'Littlehampton'  => "RG00",
+        'Midhurst'       => "RE02",
+        'Petworth'       => "RE03",
+        'Pulborough'     => "RE04",
+        'Rustington'     => "RG01",
+        'Selsey'         => "RJ01",
+        'Shoreham'       => "RF00",
+        'Southbourne'    => "RJ02",
+        'Southwater'     => "RC01",
+        'Southwick'      => "RF02",
+        'Steyning'       => "RF03",
+        'Storrington'    => "RE00",
+        'Willowhale'     => "RH01",
+        'Witterings'     => "RJ03",
+        'Worthing'       => "RK00"
     };
-    my $return = defined($map->{$fund}) ? $map->{$fund} : 'UNMAPPED';
-    return $return;
+
+    return $branch_map->{$branch} || 'E26315';
+}
+
+sub _map_income_type_to_objective {
+    my ( $self, $credit_type, $branch ) = @_;
+
+    # Map library branches to objectives
+    my $branch_map = {
+        'CPL' => 'CUL001',    # Centerville
+        'FFL' => 'CUL002',    # Fairfield
+        'FPL' => 'CUL003',    # Fairview
+        'FRL' => 'CUL004',    # Franklin
+        'IPT' => 'CUL005',    # Institut Protestant
+                              # Add other branches as needed
+    };
+
+    return $branch_map->{$branch} || 'CUL074';    # Default to Central Admin
+}
+
+sub _format_oracle_date {
+    my ( $self, $date ) = @_;
+    return "" unless $date;
+
+    # Convert from YYYY-MM-DD to YYYY/MM/DD format (updated requirement)
+    if ( $date =~ /^(\d{4})-(\d{2})-(\d{2})/ ) {
+        return "$1/$2/$3";
+    }
+    return $date;
 }
 
 sub _map_fund_to_suppliernumber {
-    my ($self, $fund) = @_;
+    my ( $self, $fund ) = @_;
     my $map = {
         KAFI   => 4539,
         KANF   => 4539,
@@ -428,8 +755,220 @@ sub _map_fund_to_suppliernumber {
         KVAT   => 4539,
         KYAD   => 4539,
     };
-    my $return = defined($map->{$fund}) ? $map->{$fund} : 'UNMAPPED';
+    my $return = defined( $map->{$fund} ) ? $map->{$fund} : '4539';
     return $return;
+}
+
+# New income report helper functions for updated requirements
+
+sub _get_item_type_from_debit_type {
+    my ( $self, $credit_type ) = @_;
+
+    # Map credit types to item types based on our loaded debit types
+    # This should eventually use the additional fields from account_debit_types
+    my $map = {
+        'PAYMENT'      => 'Fines',
+        'PURCHASE'     => 'Book Sale',
+        'CREDIT'       => 'Credit',
+        'REFUND'       => 'Refund',
+        'CANCELLATION' => 'Cancellation',
+        'OVERPAYMENT'  => 'Overpayment',
+    };
+
+    return $map->{$credit_type} || 'Unknown';
+}
+
+sub _map_credit_type_to_payment_type {
+    my ( $self, $credit_type ) = @_;
+
+    # Map credit types to payment types (CASH, CARD KIOSK, CARD TERMINAL)
+    # This is a simplified mapping - in reality this would need more logic
+    # to determine actual payment method used
+    my $map = {
+        'PAYMENT'      => 'CASH',
+        'PURCHASE'     => 'CASH',
+        'CREDIT'       => 'CASH',
+        'REFUND'       => 'CASH',
+        'CANCELLATION' => 'CASH',
+        'OVERPAYMENT'  => 'CASH',
+    };
+
+    return $map->{$credit_type} || 'CASH';
+}
+
+sub _get_income_objective {
+    my ( $self, $library_code ) = @_;
+
+    # Map library codes to objectives based on requirements
+    # TODO: This should use additional fields from branches table
+    my $map = {
+        'CRAWLEY'       => 'CUL001',
+        'BROADFIELD'    => 'CUL002',
+        'EASTGRINSTEAD' => 'CUL003',
+        'HORSHAM'       => 'CUL004',
+        'SOUTHWATER'    => 'CUL005',
+        'BURGESSHILL'   => 'CUL006',
+        'HAYWARDSHE'    => 'CUL007',
+        'HENFIELD'      => 'CUL008',
+        'HASSOCKS'      => 'CUL009',
+        'HURSTPIERP'    => 'CUL010',
+        'STORRINGTON'   => 'CUL011',
+        'BILLINGSH'     => 'CUL012',
+        'MIDHURST'      => 'CUL013',
+        'PETWORTH'      => 'CUL014',
+        'PULBOROUGH'    => 'CUL015',
+        'SHOREHAM'      => 'CUL016',
+        'LANCING'       => 'CUL017',
+        'SOUTHWICK'     => 'CUL018',
+        'STEYNING'      => 'CUL019',
+        'LITTLEHAMP'    => 'CUL020',
+        'RUSTINGTON'    => 'CUL021',
+        'ANGMERING'     => 'CUL022',
+        'ARUNDEL'       => 'CUL023',
+        'EASTPRESTON'   => 'CUL024',
+        'FERRING'       => 'CUL025',
+        'BOGNORREGIS'   => 'CUL026',
+        'WILLOWHALE'    => 'CUL027',
+        'BOGNORMOB'     => 'CUL028',
+        'CHICHESTER'    => 'CUL029',
+        'SELSEY'        => 'CUL030',
+        'SOUTHBOURNE'   => 'CUL031',
+        'WITTERINGS'    => 'CUL032',
+        'WORTHING'      => 'CUL033',
+        'BROADWATER'    => 'CUL034',
+        'DURRINGTON'    => 'CUL035',
+        'FINDON'        => 'CUL036',
+        'GORING'        => 'CUL037',
+        'CENTRAL'       => 'CUL074',
+    };
+
+    return $map->{$library_code} || 'CUL074';    # Default to Central Admin
+}
+
+sub _get_item_type_subjective {
+    my ( $self, $item_type ) = @_;
+
+    # Map item types to subjective codes based on requirements
+    my $map = {
+        'Fines'        => '841800',
+        'Book Sale'    => '841850',
+        'Credit'       => '841800',
+        'Refund'       => '841800',
+        'Cancellation' => '841800',
+        'Overpayment'  => '841800',
+    };
+
+    return $map->{$item_type} || '841800';
+}
+
+sub _get_item_type_subanalysis {
+    my ( $self, $item_type ) = @_;
+
+    # Map item types to subanalysis codes based on requirements
+    my $map = {
+        'Fines'        => '5435',
+        'Book Sale'    => '5436',
+        'Credit'       => '5437',
+        'Refund'       => '5438',
+        'Cancellation' => '5439',
+        'Overpayment'  => '5440',
+    };
+
+    return $map->{$item_type} || '5435';
+}
+
+sub _get_cost_centre_offset {
+    my ( $self, $item_type ) = @_;
+
+    # Map item types to cost centre offset codes
+    # Using sample data from requirements
+    my $map = {
+        'Fines'        => 'DM87',
+        'Book Sale'    => 'DM87',
+        'Credit'       => 'DM87',
+        'Refund'       => 'DM87',
+        'Cancellation' => 'DM87',
+        'Overpayment'  => 'DM87',
+    };
+
+    return $map->{$item_type} || 'DM87';
+}
+
+sub _get_objective_offset {
+    my ( $self, $item_type ) = @_;
+
+    # Map item types to objective offset codes
+    # Using sample data from requirements
+    my $map = {
+        'Fines'        => 'SRT003',
+        'Book Sale'    => 'SRT003',
+        'Credit'       => 'SRT003',
+        'Refund'       => 'SRT003',
+        'Cancellation' => 'SRT003',
+        'Overpayment'  => 'SRT003',
+    };
+
+    return $map->{$item_type} || 'SRT003';
+}
+
+sub _get_subjective_offset {
+    my ( $self, $item_type ) = @_;
+
+    # Map item types to subjective offset codes
+    # Using sample data from requirements
+    my $map = {
+        'Fines'        => '276001',
+        'Book Sale'    => '276001',
+        'Credit'       => '276001',
+        'Refund'       => '276001',
+        'Cancellation' => '276001',
+        'Overpayment'  => '276001',
+    };
+
+    return $map->{$item_type} || '276001';
+}
+
+sub _get_subanalysis_offset {
+    my ( $self, $item_type ) = @_;
+
+    # Map item types to subanalysis offset codes
+    # Using sample data from requirements
+    my $map = {
+        'Fines'        => '5435',
+        'Book Sale'    => '5435',
+        'Credit'       => '5435',
+        'Refund'       => '5435',
+        'Cancellation' => '5435',
+        'Overpayment'  => '5435',
+    };
+
+    return $map->{$item_type} || '5435';
+}
+
+sub _get_item_type_vat_code {
+    my ( $self, $item_type ) = @_;
+
+    # Map item types to VAT codes (STANDARD, ZERO, OUT OF SCOPE)
+    my $map = {
+        'Fines'        => 'OUT OF SCOPE',
+        'Book Sale'    => 'ZERO',
+        'Credit'       => 'OUT OF SCOPE',
+        'Refund'       => 'OUT OF SCOPE',
+        'Cancellation' => 'OUT OF SCOPE',
+        'Overpayment'  => 'OUT OF SCOPE',
+    };
+
+    return $map->{$item_type} || 'OUT OF SCOPE';
+}
+
+sub _calculate_vat_amount_new {
+    my ( $self, $amount, $vat_code ) = @_;
+
+    return 0 unless $vat_code eq 'STANDARD';
+
+    # Standard VAT rate is 20%
+    my $vat_amount = $amount * 0.20;
+    return int( $vat_amount * 100 );    # Convert to pence
 }
 
 1;

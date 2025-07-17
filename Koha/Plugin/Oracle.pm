@@ -505,8 +505,8 @@ sub _generate_income_report {
         {
             %{$date_conditions},
             debit_type_code => undef,  # Only credits
-            amount => { '>', 0 },       # Positive amounts
-            description => { 'NOT LIKE' => '%Pay360%' }  # Exclude Pay360 payments
+            amount => { '<', 0 },       # Negative amounts (credits)
+            description => { 'NOT LIKE' => '%Pay360%' }  # FIXME: Exclude Pay360 payments
         }
     );
 
@@ -553,7 +553,7 @@ sub _generate_income_report {
                 'transaction_date'
             ],
             order_by => [
-                { 'DATE' => 'credit.date' },
+                { '-desc' => 'credit.date' },
                 'credit.branchcode',
                 'credit.credit_type_code',
                 'debit.debit_type_code'
@@ -586,37 +586,34 @@ sub _generate_income_report {
 
             # Generate document description using new format
             my $doc_description = 
-                dt_from_string( $date )->strftime('%d/%m/%y') . "-"
+                dt_from_string( $date )->strftime('%b%d/%y') . "/"
               . $library
               . "-LIB-Income";
 
-            # Get accounting date in Excel serial format
+            # Get accounting date in Oracle format
             my $accounting_date = $self->_format_oracle_date( $date );
-
-            # Get item type from debit type - this determines the GL codes
-            my $item_type = $self->_get_item_type_from_debit_type($debit_type);
 
             # Get GL code mappings
             my $cost_centre = "RN03";    # Always RN03 for libraries
             my $objective   = $self->_get_income_objective( $library );
-            my $subjective  = $self->_get_item_type_subjective( $item_type );
-            my $subanalysis = $self->_get_item_type_subanalysis( $item_type );
+            my $subjective  = $self->_get_income_subjective( $debit_type );
+            my $subanalysis = $self->_get_income_subanalysis( $debit_type );
 
             # Get offset fields
-            my $cost_centre_offset = $self->_get_cost_centre_offset( $item_type );
-            my $objective_offset   = $self->_get_objective_offset( $item_type );
-            my $subjective_offset  = $self->_get_subjective_offset( $item_type );
-            my $subanalysis_offset = $self->_get_subanalysis_offset( $item_type );
+            my $cost_centre_offset = $self->_get_income_costcenter( $debit_type );
+            my $objective_offset   = $self->_get_objective_offset( $debit_type );
+            my $subjective_offset  = $self->_get_subjective_offset( $debit_type );
+            my $subanalysis_offset = $self->_get_subanalysis_offset( $debit_type );
 
             # Get VAT information using new codes
-            my $vat_code = $self->_get_item_type_vat_code( $item_type );
+            my $vat_code = $self->_get_debit_type_vat_code( $debit_type );
             my $vat_amount = $self->_calculate_vat_amount_new( $amount, $vat_code );
 
             # Map payment type to standard format
             my $mapped_payment_type = $self->_map_credit_type_to_payment_type($credit_type);
 
             # Create line description in format: "[Payment Type] [Item Type]"
-            my $line_description = $mapped_payment_type . " " . $item_type;
+            my $line_description = $mapped_payment_type . " " . $debit_type;
             $line_description =~ s/[|"]//g;   # Remove pipe and quote characters
 
             # Build record according to new 19-field cash management spec
@@ -626,22 +623,19 @@ sub _generate_income_report {
                     $doc_reference,      # 1. D_Document Document Number
                     $doc_description,    # 2. D_Document Description
                     $accounting_date,    # 3. D_Document Date
-                    "",                  # 4. EMPTY
-                    $line_number,        # 5. D_Line Number
-                    $amount_pence,       # 6. D_Line Amount (positive, in pence)
-                    "",                  # 7. EMPTY
-                    $cost_centre,        # 8. D_Cost Centre
-                    $objective,          # 9. D_Objective
-                    $subjective,         # 10. D_Subjective
-                    $subanalysis,        # 11. D_Subanalysis
-                    "",                  # 12. EMPTY
-                    $cost_centre_offset, # 13. D_Cost Centre Offset
-                    $objective_offset,   # 14. D_Objective Offset
-                    $subjective_offset,  # 15. D_Subjective Offset
-                    $subanalysis_offset, # 16. D_Subanalysis Offset
-                    $line_description,   # 17. D_Line Description
-                    $vat_code,           # 18. D_VAT Code
-                    $vat_amount          # 19. D_VAT Amount
+                    $line_number,        # 4. D_Line Number
+                    $amount_pence,       # 5. D_Line Amount (positive, in pence)
+                    $cost_centre,        # 6. D_Cost Centre
+                    $objective,          # 7. D_Objective
+                    $subjective,         # 8. D_Subjective
+                    $subanalysis,        # 9. D_Subanalysis
+                    $cost_centre_offset, # 10. D_Cost Centre Offset
+                    $objective_offset,   # 11. D_Objective Offset
+                    $subjective_offset,  # 12. D_Subjective Offset
+                    $subanalysis_offset, # 13. D_Subanalysis Offset
+                    $line_description,   # 14. D_Line Description
+                    $vat_code,           # 15. D_VAT Code
+                    $vat_amount          # 16. D_VAT Amount
                 ]
             );
 
@@ -782,7 +776,7 @@ sub _map_fund_to_suppliernumber {
 
 # New income report helper functions for updated requirements
 
-sub _get_item_type_from_debit_type {
+sub _get_debit_type_from_debit_type {
     my ( $self, $credit_type ) = @_;
 
     # Map credit types to item types based on our loaded debit types
@@ -821,7 +815,7 @@ sub _get_income_objective {
     my ( $self, $library_code ) = @_;
 
     # Map library codes to objectives based on requirements
-    # TODO: This should use additional fields from branches table
+    # FIXME: This should use additional fields attached to the branches table instead of being hard coded.
     my $map = {
         'CRAWLEY'       => 'CUL001',
         'BROADFIELD'    => 'CUL002',
@@ -866,8 +860,8 @@ sub _get_income_objective {
     return $map->{$library_code} || 'CUL074';    # Default to Central Admin
 }
 
-sub _get_item_type_subjective {
-    my ( $self, $item_type ) = @_;
+sub _get_income_subjective {
+    my ( $self, $debit_type ) = @_;
 
     # Map item types to subjective codes based on requirements
     my $map = {
@@ -879,11 +873,11 @@ sub _get_item_type_subjective {
         'Overpayment'  => '841800',
     };
 
-    return $map->{$item_type} || '841800';
+    return $map->{$debit_type} || '841800';
 }
 
-sub _get_item_type_subanalysis {
-    my ( $self, $item_type ) = @_;
+sub _get_income_subanalysis {
+    my ( $self, $debit_type ) = @_;
 
     # Map item types to subanalysis codes based on requirements
     my $map = {
@@ -895,11 +889,11 @@ sub _get_item_type_subanalysis {
         'Overpayment'  => '5440',
     };
 
-    return $map->{$item_type} || '5435';
+    return $map->{$debit_type} || '5435';
 }
 
-sub _get_cost_centre_offset {
-    my ( $self, $item_type ) = @_;
+sub _get_income_costcenter {
+    my ( $self, $debit_type ) = @_;
 
     # Map item types to cost centre offset codes
     # Using sample data from requirements
@@ -912,11 +906,11 @@ sub _get_cost_centre_offset {
         'Overpayment'  => 'DM87',
     };
 
-    return $map->{$item_type} || 'DM87';
+    return $map->{$debit_type} || 'DM87';
 }
 
 sub _get_objective_offset {
-    my ( $self, $item_type ) = @_;
+    my ( $self, $debit_type ) = @_;
 
     # Map item types to objective offset codes
     # Using sample data from requirements
@@ -929,11 +923,11 @@ sub _get_objective_offset {
         'Overpayment'  => 'SRT003',
     };
 
-    return $map->{$item_type} || 'SRT003';
+    return $map->{$debit_type} || 'SRT003';
 }
 
 sub _get_subjective_offset {
-    my ( $self, $item_type ) = @_;
+    my ( $self, $debit_type ) = @_;
 
     # Map item types to subjective offset codes
     # Using sample data from requirements
@@ -946,11 +940,11 @@ sub _get_subjective_offset {
         'Overpayment'  => '276001',
     };
 
-    return $map->{$item_type} || '276001';
+    return $map->{$debit_type} || '276001';
 }
 
 sub _get_subanalysis_offset {
-    my ( $self, $item_type ) = @_;
+    my ( $self, $debit_type ) = @_;
 
     # Map item types to subanalysis offset codes
     # Using sample data from requirements
@@ -963,11 +957,11 @@ sub _get_subanalysis_offset {
         'Overpayment'  => '5435',
     };
 
-    return $map->{$item_type} || '5435';
+    return $map->{$debit_type} || '5435';
 }
 
-sub _get_item_type_vat_code {
-    my ( $self, $item_type ) = @_;
+sub _get_debit_type_vat_code {
+    my ( $self, $debit_type ) = @_;
 
     # Map item types to VAT codes (STANDARD, ZERO, OUT OF SCOPE)
     my $map = {
@@ -979,7 +973,7 @@ sub _get_item_type_vat_code {
         'Overpayment'  => 'OUT OF SCOPE',
     };
 
-    return $map->{$item_type} || 'OUT OF SCOPE';
+    return $map->{$debit_type} || 'OUT OF SCOPE';
 }
 
 sub _calculate_vat_amount_new {

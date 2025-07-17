@@ -26,28 +26,25 @@
 |         1 | D_Document Document Number | TEXT   | Any Reference Number from O5TH      | SAMPLE1                        |
 |         2 | D_Document Description     | TEXT   | `<slip_no>”-“<branch>”-LIB-Income”` | SEP15/20/CN-Crawley-LIB-Income |
 |         3 | D_Document Date            | TEXT   | Accounting Date                     | 45731                          |
-|         4 | EMPTY                      | TEXT   | Unmapped                            |                                |
-|         5 | D_Line Number              | TEXT   | Line Number                         | 1                              |
-|         6 | D_Line Amount              | AMOUNT | Postive Amount (No Refunds)         | 450                            |
-|         7 | EMPTY                      | TEXT   | Unmapped                            |                                |
-|         8 | D_Cost Centre              | TEXT   | Cost Centre                         | DG92                           |
-|         9 | D_Objective                | TEXT   | Objective                           | CUL001                         |
-|        10 | D_Subjective               | TEXT   | Subjective                          | 841800                         |
-|        11 | D_Subanalysis              | TEXT   | Subanalysis                         | 5435                           |
-|        12 | EMPTY                      | TEXT   | Unmapped                            |                                |
-|        13 | D_Cost Centre Offset       | TEXT   | Cost Centre                         | DM87                           |
-|        14 | D_Objective Offset         | TEXT   | Objective                           | SRT003                         |
-|        15 | D_Subjective Offset        | TEXT   | Subjective                          | 276001                         |
-|        16 | D_Subanalysis Offset       | TEXT   | Subanalysis                         | 5435                           |
-|        17 | D_Line Description         | TEXT   | Description from Source             | Withdrawn books for sale       |
-|        18 | D_VAT Code                 | TEXT   | VAT Code                            | STD                            |
-|        19 | D_VAT Amount               | AMOUNT | VAT Amount                          | 90                             |
+|         4 | D_Line Number              | TEXT   | Line Number                         | 1                              |
+|         5 | D_Line Amount              | AMOUNT | Postive Amount (No Refunds)         | 450                            |
+|         6 | D_Cost Centre              | TEXT   | Cost Centre                         | DG92                           |
+|         7 | D_Objective                | TEXT   | Objective                           | CUL001                         |
+|         8 | D_Subjective               | TEXT   | Subjective                          | 841800                         |
+|         9 | D_Subanalysis              | TEXT   | Subanalysis                         | 5435                           |
+|        10 | D_Cost Centre Offset       | TEXT   | Cost Centre                         | DM87                           |
+|        11 | D_Objective Offset         | TEXT   | Objective                           | SRT003                         |
+|        12 | D_Subjective Offset        | TEXT   | Subjective                          | 276001                         |
+|        13 | D_Subanalysis Offset       | TEXT   | Subanalysis                         | 5435                           |
+|        14 | D_Line Description         | TEXT   | Description from Source             | Withdrawn books for sale       |
+|        15 | D_VAT Code                 | TEXT   | VAT Code                            | STD                            |
+|        16 | D_VAT Amount               | AMOUNT | VAT Amount                          | 90                             |
 
 ## Koha Field mappings
 
 ## Additional notes
 
-- Koha should post the sum of transactions per library per item type per receipt type (configurable as payment type in Koha) per day.
+- Koha should post the sum of transactions per library per debit type per receipt type (configurable as payment type in Koha) per day.
 - Koha should use location of the income to derive the Cost Centre and Objective
 - For Libraries Cost Centre is always RN03
 - For Objectives the mapping is:
@@ -95,7 +92,7 @@
 
   - We should not hard code these if possible, instead opting to use the additional fields options to add them to the library definitions (branches table)
 
-- The subjective, subanalysis and VAT code are derived from the item type.
+- The subjective, subanalysis and VAT code are derived from the debit type.
 - Expected VAT Codes are STANDARD, ZERO, OUT OF SCOPE
 - Payment types will be defined as:
   | CODE | Description |
@@ -103,9 +100,10 @@
   | CASH | includes both physical cash and cheques |
   | CARD KIOSK | debit or credit card payment to a kiosk |
   | CARD TERMINAL | debit or credit card payment to a handheld CHIP and PIN terminal |
+  | PAY360 | payment using online payments system, Pay360 |
 
 - The descriptions for lines will be:
-  - Payment type followed by Item type
+  - Payment type followed by debit type
   - Example: CASH Book Sale
 - Pay360 payments should be EXCLUDED from this report
 

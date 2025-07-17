@@ -276,9 +276,9 @@ sub _generate_invoices_report {
         $results = "";
         open my $fh, '>', \$results or die "Could not open scalar ref: $!";
 
-        # Start with header line
+        # Start with header line matching new client requirements
         my @header_line =
-          qw(INVOICE_NUMBER INVOICE_TOTAL INVOICE_DATE SUPPLIER_NUMBER CONTRACT_NUMBER SHIPMENT_DATE LINE_AMOUNT TAX_AMOUNT TAX_CODE DESCRIPTION COST_CENTER_PROPERTY_KEY OBJECT SUBJECTIVE SUBANALYSIS LIN_NUM);
+          qw(INVOICE_NUMBER INVOICE_TOTAL INVOICE_DATE SUPPLIER_NUMBER_PROPERTY_KEY CONTRACT_NUMBER SHIPMENT_DATE LINE_AMOUNT TAX_AMOUNT TAX_CODE DESCRIPTION COST_CENTRE_PROPERTY_KEY OBJECTIVE SUBJECTIVE SUBANALYSIS LIN_NUM);
         my $worked = $csv->print( $fh, \@header_line );
 
         while ( my $invoice = $invoices->next ) {
@@ -317,21 +317,25 @@ sub _generate_invoices_report {
                     $description = $biblio->title || $description;
                 }
 
-                # Build line records
+                # Build line records with new format (15 fields)
+                # Line record: INVOICE_NUMBER, then empty fields for header data, then line-specific data
                 for my $qty_unit ( 1 .. $quantity ) {
                     push @orderlines, [
-                        sprintf( "%04d", $invoice_count ),    # Invoice ID
-                        $line_count,                          # Line Number
-                        "ITEM",                               # Line Type
-                        $unitprice,                           # Amount
-                        $description,                         # Description
-                        $self->_get_acquisitions_distribution($budget_code)
-                        ,                        # Distribution Combination
-                        $tax_code,               # Tax Classification Code
-                        $tax_value_on_receiving, # Tax Control Amount
-                        "N",                     # Prorate Across All Item Lines
-                        "WSCC Library",          # Attribute Category
-                        $invoice->invoicenumber  # Attribute1
+                        $invoice->invoicenumber,              # INVOICE_NUMBER
+                        "",                                   # INVOICE_TOTAL (empty for line)
+                        "",                                   # INVOICE_DATE (empty for line)
+                        "",                                   # SUPPLIER_NUMBER_PROPERTY_KEY (empty for line)
+                        "",                                   # CONTRACT_NUMBER (empty for line)
+                        "",                                   # SHIPMENT_DATE (empty for line)
+                        $unitprice,                           # LINE_AMOUNT
+                        $tax_value_on_receiving,              # TAX_AMOUNT
+                        $tax_code,                            # TAX_CODE
+                        $description,                         # DESCRIPTION
+                        $self->_get_acquisitions_costcenter(), # COST_CENTRE_PROPERTY_KEY
+                        $self->_get_acquisitions_objective(),  # OBJECTIVE
+                        $self->_get_acquisitions_subjective(), # SUBJECTIVE
+                        $self->_get_acquisitions_subanalysis($budget_code), # SUBANALYSIS
+                        $line_count                           # LIN_NUM
                     ];
                 }
             }
@@ -347,36 +351,26 @@ sub _generate_invoices_report {
             # Make invoice total negative for AP
             $invoice_total *= -1;
 
-            # Build header record according to Oracle spec (23 fields)
+            # Build header record with new format (15 fields)
+            # Header record: INVOICE_NUMBER, INVOICE_TOTAL, INVOICE_DATE, SUPPLIER_NUMBER_PROPERTY_KEY, CONTRACT_NUMBER, SHIPMENT_DATE, then empty fields
             $csv->print(
                 $fh,
                 [
-                    sprintf( "%04d", $invoice_count ),    # Invoice ID
-                    "West Sussex County Council BU",      # Business Unit
-                    "KOHA",                               # Source
-                    $invoice->invoicenumber,              # Invoice Number
-                    $invoice_total,                       # Invoice Amount
-                    $self->_format_oracle_date( $invoice->closedate )
-                    ,                                     # Invoice Date
-                    "",                                   # Supplier Name
-                    $supplier_number,                     # Supplier Number
-                    "",                                   # Supplier Site
-                    "GBP",                                # Invoice Currency
-                    "GBP",                                # Payment Currency
-                    "Libraries",                          # Description
-                    $filename_no_ext,                     # Import Set
-                    ( $invoice_total >= 0 ? "STANDARD" : "CREDIT" )
-                    ,                                     # Invoice Type
-                    "West Sussex County Council",         # Legal Entity
-                    "",                                   # Payment Terms
-                    $self->_format_oracle_date( $invoice->shipmentdate )
-                    ,               # Invoice Received Date
-                    "*SYSDATE*",    # Accounting Date
-                    "",             # Payment Method
-                    "N",            # Pay Group
-                    "N",            # Pay Alone
-                    "N",            # Calculate Tax During Import
-                    "N"             # Add Tax to Invoice Amount
+                    $invoice->invoicenumber,              # INVOICE_NUMBER
+                    $invoice_total,                       # INVOICE_TOTAL
+                    $self->_format_oracle_date( $invoice->closedate ), # INVOICE_DATE
+                    $supplier_number,                     # SUPPLIER_NUMBER_PROPERTY_KEY
+                    "C50335",                            # CONTRACT_NUMBER
+                    $self->_format_oracle_date( $invoice->shipmentdate ), # SHIPMENT_DATE
+                    "",                                   # LINE_AMOUNT (empty for header)
+                    "",                                   # TAX_AMOUNT (empty for header)
+                    "",                                   # TAX_CODE (empty for header)
+                    "",                                   # DESCRIPTION (empty for header)
+                    "",                                   # COST_CENTRE_PROPERTY_KEY (empty for header)
+                    "",                                   # OBJECTIVE (empty for header)
+                    "",                                   # SUBJECTIVE (empty for header)
+                    "",                                   # SUBANALYSIS (empty for header)
+                    ""                                    # LIN_NUM (empty for header)
                 ]
             );
 

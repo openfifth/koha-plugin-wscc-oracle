@@ -1,4 +1,4 @@
-# Requirements for for acquisitions CSV output to Oracle
+# Requirements for acquisitions CSV output to Oracle
 
 ## Interface
 
@@ -19,51 +19,55 @@
 | Inbound / Outbound                          | Inbound                                           |
 | Accept / Reject Atomic Transaction Criteria | Standard Oracle functionality will determine.     |
 
+## CSV File Format
+
+The CSV file uses a single header line with two types of records:
+
+### Header Line (15 fields)
+```
+INVOICE_NUMBER,INVOICE_TOTAL,INVOICE_DATE,SUPPLIER_NUMBER_PROPERTY_KEY,CONTRACT_NUMBER,SHIPMENT_DATE,LINE_AMOUNT,TAX_AMOUNT,TAX_CODE,DESCRIPTION,COST_CENTRE_PROPERTY_KEY,OBJECTIVE,SUBJECTIVE,SUBANALYSIS,LIN_NUM
+```
+
+### Record Types
+
+**Header Records**: Contain invoice-level information in the first 6 fields, with remaining 9 fields empty
+- Fields 1-6: Invoice data (number, total, date, supplier, contract, shipment date)
+- Fields 7-15: Empty (padded)
+
+**Line Records**: Contain line-level information in fields 7-15, with fields 2-6 empty
+- Field 1: Invoice number (links to header)
+- Fields 2-6: Empty (padded)
+- Fields 7-15: Line data (amount, tax, description, distribution codes)
+
 ## Oracle CSV Fields
 
-### AP_INVOICE_INTERFACE (Header lines)
+### Header Records (Fields 1-6 populated, 7-15 empty)
 
-| Available in Source file | Mapping Sourcing File                    | Comments                                                                                                                                      | Action                                   | Oracle Header Info          | Oracle Sample Data 1                                  |
-| ------------------------ | :--------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------- | :-------------------------- | :---------------------------------------------------- |
-| NA                       | Generate Sequence                        |                                                                                                                                               | Use Sequence                             | \*Invoice ID                | 100                                                   |
-| NA                       | Constant = West Sussex County Council BU |                                                                                                                                               | Use Default                              | \*Business Unit             | West Sussex County Council BU                         |
-| NA                       | Constant = KOHA Invoices                 |                                                                                                                                               | Use Default                              | \*Source                    | KOHA                                                  |
-| Yes                      | INVOICE_NUMBER                           | Use from Source file                                                                                                                          | Use Source                               | \*Invoice Number            | INV-KOHA-WSCC-1                                       |
-| Yes                      | INVOICE_TOTAL                            | Use from Source file                                                                                                                          | Use Source                               | \*Invoice Amount            | 5200                                                  |
-| Yes                      | INVOICE_DATE                             | Use from Source file                                                                                                                          | Derive from Source                       | \*Invoice Date              | 2025/3/21 Note: Date format needs to be in YYYY/MM/DD |
-| NA                       | Not Available                            | Oracle Supplier Name will be derived from Oracle Supplier Number using unique alternate site name passed as vendor number in the source file. | Derive from alternate supplier site name | \*\*Supplier Name           |                                                       |
-| Yes                      | SUPPLIER_NUMBER_PROPERTY_KEY             | Oracle Supplier Number will be derived using unique alternate site name passed as vendor number in the source file.                           | Derive from alternate supplier site name | \*\*Supplier Number         | 3153                                                  |
-|                          | Not Available                            | Oracle Supplier Site will be derived using unique alternate site name passed as vendor number in the source file.                             | Derive from alternate supplier site name | \*Supplier Site             |                                                       |
-| NA                       | Constant = GBP                           |                                                                                                                                               | Use Default                              | Invoice Currency            | GBP                                                   |
-| NA                       | Constant = GBP                           |                                                                                                                                               | Use Default                              | Payment Currency            | GBP                                                   |
-| NA                       | Constant = Libraries                     |                                                                                                                                               | Use Default                              | Description                 | Libraries                                             |
-| NA                       | File Name                                | Use source file name without extension                                                                                                        | Use Source                               | Import Set                  | APInvoice_DDMMYYYYHH24MISS                            |
-| NA                       | Not Available                            | If positive amount, default to STANDARD, else CREDIT                                                                                          | Derivation Logic                         | \*Invoice Type              | STANDARD                                              |
-| NA                       | Constant = West Sussex County Council    |                                                                                                                                               | Use Default                              | Legal Entity                | West Sussex County Council                            |
-| NA                       |                                          | Default from Supplier site                                                                                                                    | Use Default                              | \*Payment Terms             | Net 30                                                |
-| Yes                      | SHIPMENT_DATE                            | Use shipment date as invoice received date.                                                                                                   | Use Source                               | Invoice Received Date       | 2025/3/20 Note: Date format needs to be in YYYY/MM/DD |
-| NA                       | Constant = SYSDATE                       |                                                                                                                                               | Use Default                              | Accounting Date             |                                                       |
-| NA                       | Not available                            | The payment method will be left blank as it will default from primary payment method at Supplier Site                                         | Leave Blank                              | Payment Method              |                                                       |
-| NA                       | Constant = 'N'                           |                                                                                                                                               | Use Default                              | Pay Group                   | N                                                     |
-| NA                       | Constant = 'N'                           |                                                                                                                                               | Use Default                              | Pay Alone                   | N                                                     |
-| NA                       | Constant = 'N'                           |                                                                                                                                               | Use Default                              | Calculate Tax During Import | N                                                     |
-| NA                       | Constant = 'N'                           |                                                                                                                                               | Use Default                              | Add Tax to Invoice Amount   | N                                                     |
+| Field Position | Field Name                     | Source                          | Sample Data        | Comments                                               |
+| -------------- | ------------------------------ | ------------------------------- | ------------------ | ------------------------------------------------------ |
+| 1              | INVOICE_NUMBER                 | invoice.invoicenumber           | INV-KOHA-RBKC-31   | Invoice number from Koha                              |
+| 2              | INVOICE_TOTAL                  | Calculated from order lines     | 5200               | Sum of all line amounts for invoice                    |
+| 3              | INVOICE_DATE                   | invoice.closedate               | 03/21/2025         | Date invoice was closed in Koha                       |
+| 4              | SUPPLIER_NUMBER_PROPERTY_KEY   | Fund-based mapping              | 3513               | Mapped from fund code to supplier number              |
+| 5              | CONTRACT_NUMBER                | Constant                        | C50335             | Fixed contract number                                  |
+| 6              | SHIPMENT_DATE                  | invoice.shipmentdate            | 03/20/2025         | Date of shipment                                       |
+| 7-15           | (LINE_AMOUNT through LIN_NUM)  | Empty                           | (empty)            | Empty fields for header records                        |
 
-### AP_INVOICE_LINES_INTERFACE (Order lines)
+### Line Records (Field 1 populated, 2-6 empty, 7-15 populated)
 
-| Available in Source File | Mapping to Source File                                                                                            | Comments / Notes                                                                                                                                                                                                                                  | Action               | Oracle Fields                 |
-| :----------------------- | :---------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------- | :---------------------------- |
-| NA                       | Generate Sequence                                                                                                 | Value same as in Header to link Invoice header with Invoice Lines                                                                                                                                                                                 | Copy from Header     | \*Invoice ID                  |
-| NA                       | Sequence                                                                                                          | Reset the sequence to 1 for each Invoice                                                                                                                                                                                                          | Use Sequence         | Line Number                   |
-| NA                       | Constant = "ITEM"                                                                                                 |                                                                                                                                                                                                                                                   | Use Default          | \*Line Type                   |
-| Yes                      | LINE_AMOUNT                                                                                                       | Use from Source file                                                                                                                                                                                                                              | Use Source           | \*Amount                      |
-| Yes                      | DESCRIPTION                                                                                                       | Use from Source file                                                                                                                                                                                                                              | Use Source           | Description                   |
-| Yes                      | Cost Centre – COST_CENTRE_PROPERTY_KEY, Objective - OBJECTIVE, Subjective - SUBJECTIVE, SubAnalysis – SUBANALYSIS | Following is representation of Distribution Combination: Company code: 1000[Default] Cost Centre: RN05 Objective: ZZZ999 Subjective - 503000 Sub Analysis – [Depending on type of item required] Spare1 - 000000[Default] Spare2 -000000[Default] | Use Source + Default | Distribution Combination      |
-| Yes                      | TAX_CODE                                                                                                          | Use from Source file                                                                                                                                                                                                                              | Use Source           | Tax Classification Code       |
-| Yes                      | TAX_AMOUNT                                                                                                        | Use from Source file                                                                                                                                                                                                                              | Use Source           | Tax Control Amount            |
-| NA                       | Constant = 'N'                                                                                                    |                                                                                                                                                                                                                                                   | Use Default          | Prorate Across All Item Lines |
-| NA                       | Constant = WSCC Library                                                                                           | ANY ADDITIONAL INFORMATION CAN BE STORED USING ATTRIBUTES                                                                                                                                                                                         | Use Default          | Attribute Category            |
-| Yes                      | CONTRACT_NUMBER                                                                                                   | Contract Number                                                                                                                                                                                                                                   | Use Source           | ATTRIBUTE1                    |
+| Field Position | Field Name                     | Source                          | Sample Data                    | Comments                                               |
+| -------------- | ------------------------------ | ------------------------------- | ------------------------------ | ------------------------------------------------------ |
+| 1              | INVOICE_NUMBER                 | invoice.invoicenumber           | INV-KOHA-RBKC-31               | Links line to header record                           |
+| 2-6            | (INVOICE_TOTAL through SHIPMENT_DATE) | Empty                   | (empty)                        | Empty fields for line records                         |
+| 7              | LINE_AMOUNT                    | line.unitprice * quantity       | 4000                           | Line amount in pence                                   |
+| 8              | TAX_AMOUNT                     | line.tax_value_on_receiving     | 0                              | Tax amount in pence                                    |
+| 9              | TAX_CODE                       | Derived from tax rate           | ZERO / STANDARD                | ZERO (0%), STANDARD (20%)                             |
+| 10             | DESCRIPTION                    | biblio.title or default         | Invoice for educational books  | Item description                                       |
+| 11             | COST_CENTRE_PROPERTY_KEY       | Constant                        | RN05                           | Cost center for all acquisitions                      |
+| 12             | OBJECTIVE                      | Constant                        | ZZZ999                         | Objective for all acquisitions                        |
+| 13             | SUBJECTIVE                     | Constant                        | 503000                         | Subjective for all acquisitions                       |
+| 14             | SUBANALYSIS                    | Fund-based mapping              | 5460                           | Mapped from fund code                                  |
+| 15             | LIN_NUM                        | Line sequence                   | 1                              | Line number within invoice                             |
 
 ## Koha Field mappings
 

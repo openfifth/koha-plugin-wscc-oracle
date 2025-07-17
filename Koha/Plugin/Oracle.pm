@@ -275,6 +275,11 @@ sub _generate_invoices_report {
         $results = "";
         open my $fh, '>', \$results or die "Could not open scalar ref: $!";
 
+        # Start with header line
+        my @header_line =
+          qw(INVOICE_NUMBER INVOICE_TOTAL INVOICE_DATE SUPPLIER_NUMBER CONTRACT_NUMBER SHIPMENT_DATE LINE_AMOUNT TAX_AMOUNT TAX_CODE DESCRIPTION COST_CENTER_PROPERTY_KEY OBJECT SUBJECTIVE SUBANALYSIS LIN_NUM);
+        my $worked = $csv->print( $fh, \@header_line );
+
         while ( my $invoice = $invoices->next ) {
             $invoice_count++;
             my $invoice_total = 0;
@@ -569,7 +574,7 @@ sub _generate_income_report {
             # Get accounting date in Excel serial format
             my $accounting_date = $self->_format_oracle_date( $data->{date} );
 
-            # Get GL code mappings using new requirements
+            # Get GL code mappings
             my $cost_centre = "RN03";    # Always RN03 for libraries
             my $objective   = $self->_get_income_objective( $data->{library} );
             my $subjective =

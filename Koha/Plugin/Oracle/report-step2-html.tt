@@ -5,12 +5,36 @@
 [% SET footerjs = 1 %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>[% FILTER collapse %]
-    [% t("WSCC Oracle") | html %] &rsaquo;
+    [% IF type == 'income' %]
+        [% t("WSCC Oracle Income Report") | html %] &rsaquo;
+    [% ELSE %]
+        [% t("WSCC Oracle Acquisitions Report") | html %] &rsaquo;
+    [% END %]
     [% t("Plugins") | html %] &rsaquo;
     [% t("Koha") | html %]
 [% END %]</title>
  <script type="text/javascript" src="[% PLUGIN_PATH %]/datepicker/js/datepicker.js"></script>
  <link href="[% PLUGIN_PATH %]/datepicker/css/datepicker.css" rel="stylesheet" type="text/css" />
+ <style>
+ .report-preview {
+     max-height: 400px;
+     overflow-y: auto;
+     font-family: 'Courier New', monospace;
+     font-size: 12px;
+     line-height: 1.4;
+     background-color: #f8f9fa;
+     border: 1px solid #dee2e6;
+     border-radius: 0.25rem;
+     padding: 15px;
+ }
+ .badge {
+     font-size: 0.9em;
+     margin-right: 10px;
+ }
+ .report-info {
+     margin-bottom: 20px;
+ }
+ </style>
 [% INCLUDE 'doc-head-close.inc' %]
 </head>
 <body id="plugins_rbkc_oracle" class="plugins">
@@ -27,7 +51,11 @@
             <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report&startdate=[% startdate | uri %]&enddate=[% enddate | uri %]">WSCC Oracle</a>
         [% END %]
         [% WRAPPER breadcrumb_item bc_active= 1 %]
-            <span>Results</span>
+            [% IF type == 'income' %]
+                <span>Income Report Results</span>
+            [% ELSE %]
+                <span>Acquisitions Report Results</span>
+            [% END %]
         [% END %]
     [% END #/ WRAPPER breadcrumbs %]
 [% END #/ WRAPPER sub-header.inc %]
@@ -36,17 +64,65 @@
     <div class="row">
         <div class="col-md-10 order-md-2 order-sm-1">
             <main>
-                <h1>Oracle Report - Results - [% date_ran | $KohaDates %]</h1>
-                <div class="page-section">
-                    <p>Report for invoices closed between [% startdate | $KohaDates %] and [% enddate | $KohaDates %]</p>
-                    [%- IF results -%]
-                    <div class="card">
-                        <pre class="card-body">[%- results | html -%]</pre>
+                [% IF type == 'income' %]
+                    <h1>Oracle Income Report - Results - [% date_ran | $KohaDates %]</h1>
+                    <div class="page-section">
+                        <p>Report for income transactions between [% startdate | $KohaDates %] and [% enddate | $KohaDates %]</p>
+                        [%- IF results -%]
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <span class="badge badge-info">Income Report</span>
+                                <span class="text-muted">Cash management format for Oracle</span>
+                            </div>
+                            <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report_step2&from=[% startdate.ymd | uri %]&to=[% enddate.ymd | uri %]&type=[% type | uri %]&output=txt" 
+                               class="btn btn-primary">
+                                <i class="fa fa-download"></i> Download CSV ([% filename | html %])
+                            </a>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Report Results</h5>
+                                <small class="text-muted">Complete report output. Use the download button above to save as CSV file.</small>
+                            </div>
+                            <pre class="card-body report-preview">[%- results | html -%]</pre>
+                        </div>
+                        [%- ELSE -%]
+                        <div class="alert alert-warning">
+                            <i class="fa fa-exclamation-triangle"></i>
+                            No income transactions found for the defined date range
+                        </div>
+                        [%- END -%]
                     </div>
-                    [%- ELSE -%]
-                    <div class="alert alert-warning">No invoices found for defined date range</div>
-                    [%- END -%]
-                </div>
+                [% ELSE %]
+                    <h1>Oracle Acquisitions Report - Results - [% date_ran | $KohaDates %]</h1>
+                    <div class="page-section">
+                        <p>Report for invoices closed between [% startdate | $KohaDates %] and [% enddate | $KohaDates %]</p>
+                        [%- IF results -%]
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <span class="badge badge-success">Acquisitions Report</span>
+                                <span class="text-muted">AP Invoice format for Oracle</span>
+                            </div>
+                            <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report_step2&from=[% startdate.ymd | uri %]&to=[% enddate.ymd | uri %]&type=[% type | uri %]&output=txt" 
+                               class="btn btn-primary">
+                                <i class="fa fa-download"></i> Download CSV ([% filename | html %])
+                            </a>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Report Results</h5>
+                                <small class="text-muted">Complete report output. Use the download button above to save as CSV file.</small>
+                            </div>
+                            <pre class="card-body report-preview">[%- results | html -%]</pre>
+                        </div>
+                        [%- ELSE -%]
+                        <div class="alert alert-warning">
+                            <i class="fa fa-exclamation-triangle"></i>
+                            No invoices found for the defined date range
+                        </div>
+                        [%- END -%]
+                    </div>
+                [% END %]
             </main>
         </div>
         <div class="col-md-2 order-sm-2 order-md-1">

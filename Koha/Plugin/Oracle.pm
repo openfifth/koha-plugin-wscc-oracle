@@ -241,10 +241,11 @@ sub _generate_invoices_report {
 
     my $csv = Text::CSV->new(
         {
-            binary     => 1,
-            eol        => "\015\012",
-            sep_char   => "|",
-            quote_char => '"'
+            binary       => 1,
+            eol          => "\015\012",
+            sep_char     => "|",
+            quote_char   => '"',
+            always_quote => 1
         }
     );
 
@@ -469,10 +470,11 @@ sub _generate_income_report {
     # Use pipe delimiter for income reports as specified
     my $csv = Text::CSV->new(
         {
-            binary     => 1,
-            eol        => "\015\012",
-            sep_char   => "|",
-            quote_char => '"'
+            binary       => 1,
+            eol          => "\015\012",
+            sep_char     => "|",
+            quote_char   => '"',
+            always_quote => 1
         }
     );
 

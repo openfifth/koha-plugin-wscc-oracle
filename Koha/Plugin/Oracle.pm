@@ -8,6 +8,8 @@ use Koha::File::Transports;
 use Koha::Number::Price;
 use Koha::Account::Lines;
 use Koha::Account::Offsets;
+use Koha::AdditionalFields;
+use Koha::AdditionalFieldValues;
 
 use File::Spec;
 use List::Util qw(min max);
@@ -38,6 +40,10 @@ sub new {
 
     my $self = $class->SUPER::new($args);
     $self->{cgi} = CGI->new();
+    
+    # Initialize caches for additional fields
+    $self->{debit_type_fields_cache} = {};
+    $self->{branch_fields_cache} = {};
 
     return $self;
 }
@@ -593,8 +599,9 @@ sub _generate_income_report {
             # Get accounting date in Oracle format
             my $accounting_date = $self->_format_oracle_date( $date );
 
-            # Get GL code mappings
-            my $cost_centre = "RN03";    # Always RN03 for libraries
+            # Get GL code mappings from branch additional fields
+            my $branch_fields = $self->_get_branch_additional_fields( $library );
+            my $cost_centre = $branch_fields->{cost_center} || "RN03";    # Default RN03 for libraries
             my $objective   = $self->_get_income_objective( $library );
             my $subjective  = $self->_get_income_subjective( $debit_type );
             my $subanalysis = $self->_get_income_subanalysis( $debit_type );
@@ -811,53 +818,50 @@ sub _map_credit_type_to_payment_type {
     return $map->{$credit_type} || 'CASH';
 }
 
+# Get branch additional field values with caching  
+sub _get_branch_additional_fields {
+    my ( $self, $branch_code ) = @_;
+    
+    # Return cached result if available
+    return $self->{branch_fields_cache}->{$branch_code} 
+        if exists $self->{branch_fields_cache}->{$branch_code};
+    
+    # Get additional fields for branches
+    my $additional_fields = Koha::AdditionalFields->search({
+        tablename => 'branches',
+        name => [ 'objective', 'cost_center' ]
+    });
+    
+    my $fields = {};
+    
+    # Get field values for this branch
+    while ( my $field = $additional_fields->next ) {
+        my $field_value = Koha::AdditionalFieldValues->search({
+            field_id => $field->id,
+            record_id => $branch_code
+        })->next;
+        
+        if ($field_value) {
+            $fields->{$field->name} = $field_value->value;
+        }
+    }
+    
+    # Set defaults if not found in database
+    $fields->{objective} //= 'CUL074';  # Default to Central Admin
+    $fields->{cost_center} //= 'RN03';  # Default cost center for libraries
+    
+    # Cache the result
+    $self->{branch_fields_cache}->{$branch_code} = $fields;
+    
+    return $fields;
+}
+
 sub _get_income_objective {
     my ( $self, $library_code ) = @_;
 
-    # Map library codes to objectives based on requirements
-    # FIXME: This should use additional fields attached to the branches table instead of being hard coded.
-    my $map = {
-        'CRAWLEY'       => 'CUL001',
-        'BROADFIELD'    => 'CUL002',
-        'EASTGRINSTEAD' => 'CUL003',
-        'HORSHAM'       => 'CUL004',
-        'SOUTHWATER'    => 'CUL005',
-        'BURGESSHILL'   => 'CUL006',
-        'HAYWARDSHE'    => 'CUL007',
-        'HENFIELD'      => 'CUL008',
-        'HASSOCKS'      => 'CUL009',
-        'HURSTPIERP'    => 'CUL010',
-        'STORRINGTON'   => 'CUL011',
-        'BILLINGSH'     => 'CUL012',
-        'MIDHURST'      => 'CUL013',
-        'PETWORTH'      => 'CUL014',
-        'PULBOROUGH'    => 'CUL015',
-        'SHOREHAM'      => 'CUL016',
-        'LANCING'       => 'CUL017',
-        'SOUTHWICK'     => 'CUL018',
-        'STEYNING'      => 'CUL019',
-        'LITTLEHAMP'    => 'CUL020',
-        'RUSTINGTON'    => 'CUL021',
-        'ANGMERING'     => 'CUL022',
-        'ARUNDEL'       => 'CUL023',
-        'EASTPRESTON'   => 'CUL024',
-        'FERRING'       => 'CUL025',
-        'BOGNORREGIS'   => 'CUL026',
-        'WILLOWHALE'    => 'CUL027',
-        'BOGNORMOB'     => 'CUL028',
-        'CHICHESTER'    => 'CUL029',
-        'SELSEY'        => 'CUL030',
-        'SOUTHBOURNE'   => 'CUL031',
-        'WITTERINGS'    => 'CUL032',
-        'WORTHING'      => 'CUL033',
-        'BROADWATER'    => 'CUL034',
-        'DURRINGTON'    => 'CUL035',
-        'FINDON'        => 'CUL036',
-        'GORING'        => 'CUL037',
-        'CENTRAL'       => 'CUL074',
-    };
-
-    return $map->{$library_code} || 'CUL074';    # Default to Central Admin
+    # Get objective from branch additional fields
+    my $fields = $self->_get_branch_additional_fields($library_code);
+    return $fields->{objective} || 'CUL074';    # Default to Central Admin
 }
 
 sub _get_income_subjective {
@@ -879,17 +883,9 @@ sub _get_income_subjective {
 sub _get_income_subanalysis {
     my ( $self, $debit_type ) = @_;
 
-    # Map item types to subanalysis codes based on requirements
-    my $map = {
-        'Fines'        => '5435',
-        'Book Sale'    => '5436',
-        'Credit'       => '5437',
-        'Refund'       => '5438',
-        'Cancellation' => '5439',
-        'Overpayment'  => '5440',
-    };
-
-    return $map->{$debit_type} || '5435';
+    # Get income code (subanalysis) from additional fields
+    my $fields = $self->_get_debit_type_additional_fields($debit_type);
+    return $fields->{income_code} || '5435';
 }
 
 sub _get_income_costcenter {
@@ -960,25 +956,67 @@ sub _get_subanalysis_offset {
     return $map->{$debit_type} || '5435';
 }
 
+# Get additional field values for a debit type with caching
+sub _get_debit_type_additional_fields {
+    my ( $self, $debit_type_code ) = @_;
+    
+    # Return cached result if available
+    return $self->{debit_type_fields_cache}->{$debit_type_code} 
+        if exists $self->{debit_type_fields_cache}->{$debit_type_code};
+    
+    # Get additional fields for account_debit_types
+    my $additional_fields = Koha::AdditionalFields->search({
+        tablename => 'account_debit_types',
+        name => [ 'vat_code', 'income_code', 'extra_code' ]
+    });
+    
+    my $fields = {};
+    
+    # Get field values for this debit type
+    while ( my $field = $additional_fields->next ) {
+        my $field_value = Koha::AdditionalFieldValues->search({
+            field_id => $field->id,
+            record_id => $debit_type_code
+        })->next;
+        
+        if ($field_value) {
+            $fields->{$field->name} = $field_value->value;
+        }
+    }
+    
+    # Set defaults if not found in database
+    $fields->{vat_code} //= 'O';  # Default to OUT OF SCOPE
+    $fields->{income_code} //= '5435';  # Default income code
+    $fields->{extra_code} //= '';  # Default to empty
+    
+    # Cache the result
+    $self->{debit_type_fields_cache}->{$debit_type_code} = $fields;
+    
+    return $fields;
+}
+
 sub _get_debit_type_vat_code {
     my ( $self, $debit_type ) = @_;
 
-    # Map item types to VAT codes (STANDARD, ZERO, OUT OF SCOPE)
-    my $map = {
-        'Fines'        => 'OUT OF SCOPE',
-        'Book Sale'    => 'ZERO',
-        'Credit'       => 'OUT OF SCOPE',
-        'Refund'       => 'OUT OF SCOPE',
-        'Cancellation' => 'OUT OF SCOPE',
-        'Overpayment'  => 'OUT OF SCOPE',
+    # Get VAT code from additional fields
+    my $fields = $self->_get_debit_type_additional_fields($debit_type);
+    my $vat_code = $fields->{vat_code} || 'O';
+    
+    # Map database VAT codes to Oracle format
+    my $vat_map = {
+        'S' => 'STANDARD',
+        'Z' => 'ZERO', 
+        'E' => 'EXEMPT',
+        'O' => 'OUT OF SCOPE',
     };
-
-    return $map->{$debit_type} || 'OUT OF SCOPE';
+    
+    return $vat_map->{$vat_code} || 'OUT OF SCOPE';
 }
 
 sub _calculate_vat_amount_new {
     my ( $self, $amount, $vat_code ) = @_;
 
+    # Only calculate VAT for STANDARD rate items
     return 0 unless $vat_code eq 'STANDARD';
 
     # Standard VAT rate is 20%

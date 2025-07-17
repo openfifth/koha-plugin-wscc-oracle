@@ -45,9 +45,11 @@
 ## Additional notes
 
 - Koha should post the sum of transactions per library per debit type per receipt type (configurable as payment type in Koha) per day.
-- Koha should use location of the income to derive the Cost Centre and Objective
-- For Libraries Cost Centre is always RN03
-- For Objectives the mapping is:
+- Koha should use location (branch) of the income to derive the Cost Centre and Objective
+- For Objectives there is a mapping
+
+  - We will add these as an 'Objective' additional field for the branches table
+  - The mappings table follows:
 
   | Objective | Library                |
   | --------- | ---------------------- |
@@ -90,8 +92,8 @@
   | CUL037    | GORING LIBRARY         |
   | CUL074    | CENTRAL ADMIN          |
 
-  - We should not hard code these if possible, instead opting to use the additional fields options to add them to the library definitions (branches table)
-
+- For all locations (branches) the "Cost centre" is 'RN03'
+  - We will add this as a 'Cost center' additional field for the branches table
 - The subjective, subanalysis and VAT code are derived from the debit type.
 - Expected VAT Codes are STANDARD, ZERO, OUT OF SCOPE
 - Payment types will be defined as:

@@ -25,7 +25,7 @@
 | --------: | :------------------------- | :----- | :---------------------------------- | :----------------------------- |
 |         1 | D_Document Document Number | TEXT   | Any Reference Number from O5TH      | SAMPLE1                        |
 |         2 | D_Document Description     | TEXT   | `<slip_no>”-“<branch>”-LIB-Income”` | SEP15/20/CN-Crawley-LIB-Income |
-|         3 | D_Document Date            | TEXT   | Accounting Date                     | 45731                          |
+|         3 | D_Document Date            | TEXT   | Accounting Date                     | 2025/03/21                     |
 |         4 | D_Line Number              | TEXT   | Line Number                         | 1                              |
 |         5 | D_Line Amount              | AMOUNT | Postive Amount (No Refunds)         | 450                            |
 |         6 | D_Cost Centre              | TEXT   | Cost Centre                         | DG92                           |

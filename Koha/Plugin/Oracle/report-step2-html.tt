@@ -74,10 +74,19 @@
                                 <span class="badge badge-info">Income Report</span>
                                 <span class="text-muted">Cash management format for Oracle</span>
                             </div>
-                            <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report_step2&from=[% startdate.ymd | uri %]&to=[% enddate.ymd | uri %]&type=[% type | uri %]&output=txt" 
-                               class="btn btn-primary">
-                                <i class="fa fa-download"></i> Download CSV ([% filename | html %])
-                            </a>
+                            <div class="btn-group">
+                                <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report_step2&from=[% startdate.ymd | uri %]&to=[% enddate.ymd | uri %]&type=[% type | uri %]&output=txt" 
+                                   class="btn btn-primary">
+                                    <i class="fa fa-download"></i> Download CSV ([% filename | html %])
+                                </a>
+                                <button id="sftp-upload-btn" type="button" class="btn btn-success" 
+                                        data-from="[% startdate.ymd | uri %]" 
+                                        data-to="[% enddate.ymd | uri %]" 
+                                        data-type="[% type | uri %]"
+                                        data-class="[% CLASS | uri %]">
+                                    <i class="fa fa-upload"></i> Upload to SFTP
+                                </button>
+                            </div>
                         </div>
                         <div class="card">
                             <div class="card-header">
@@ -103,10 +112,19 @@
                                 <span class="badge badge-success">Acquisitions Report</span>
                                 <span class="text-muted">AP Invoice format for Oracle</span>
                             </div>
-                            <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report_step2&from=[% startdate.ymd | uri %]&to=[% enddate.ymd | uri %]&type=[% type | uri %]&output=txt" 
-                               class="btn btn-primary">
-                                <i class="fa fa-download"></i> Download CSV ([% filename | html %])
-                            </a>
+                            <div class="btn-group">
+                                <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report_step2&from=[% startdate.ymd | uri %]&to=[% enddate.ymd | uri %]&type=[% type | uri %]&output=txt" 
+                                   class="btn btn-primary">
+                                    <i class="fa fa-download"></i> Download CSV ([% filename | html %])
+                                </a>
+                                <button id="sftp-upload-btn" type="button" class="btn btn-success" 
+                                        data-from="[% startdate.ymd | uri %]" 
+                                        data-to="[% enddate.ymd | uri %]" 
+                                        data-type="[% type | uri %]"
+                                        data-class="[% CLASS | uri %]">
+                                    <i class="fa fa-upload"></i> Upload to SFTP
+                                </button>
+                            </div>
                         </div>
                         <div class="card">
                             <div class="card-header">
@@ -131,3 +149,50 @@
     </div>
 
 [% INCLUDE 'intranet-bottom.inc' %]
+
+<script>
+$(document).ready(function() {
+    $('#sftp-upload-btn').click(function() {
+        var button = $(this);
+        var originalText = button.html();
+        
+        // Disable button and show loading state
+        button.prop('disabled', true);
+        button.html('<i class="fa fa-spinner fa-spin"></i> Uploading...');
+        
+        // Get data attributes
+        var params = {
+            class: button.data('class'),
+            method: 'sftp_upload',
+            from: button.data('from'),
+            to: button.data('to'),
+            type: button.data('type')
+        };
+        
+        // Make AJAX request
+        $.ajax({
+            url: '/cgi-bin/koha/plugins/run.pl',
+            type: 'POST',
+            data: params,
+            dataType: 'json',
+            success: function(response) {
+                if (response.success) {
+                    // Show success message
+                    alert('Success: ' + response.message);
+                } else {
+                    // Show error message
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                alert('Error uploading file: ' + error);
+            },
+            complete: function() {
+                // Re-enable button and restore original text
+                button.prop('disabled', false);
+                button.html(originalText);
+            }
+        });
+    });
+});
+</script>

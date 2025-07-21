@@ -40,10 +40,10 @@ sub new {
 
     my $self = $class->SUPER::new($args);
     $self->{cgi} = CGI->new();
-    
+
     # Initialize caches for additional fields
     $self->{debit_type_fields_cache} = {};
-    $self->{branch_fields_cache} = {};
+    $self->{branch_fields_cache}     = {};
 
     return $self;
 }
@@ -210,7 +210,7 @@ sub report_step2 {
       $self->_generate_report( $startdate, $enddate, $type, $filename );
 
     my $templatefile;
-    
+
     if ( $output eq "txt" ) {
         print $cgi->header( -attachment => "$filename" );
         $templatefile = 'report-step2-txt.tt';
@@ -218,7 +218,7 @@ sub report_step2 {
     else {
         print $cgi->header();
         $templatefile = 'report-step2-html.tt';
-       }
+    }
 
     my $template = $self->get_template( { file => $templatefile } );
 
@@ -238,11 +238,11 @@ sub report_step2 {
 sub sftp_upload {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
-    
+
     my $startdate = $cgi->param('from');
     my $enddate   = $cgi->param('to');
     my $type      = $cgi->param('type');
-    
+
     # Parse dates
     if ($startdate) {
         $startdate =~ s/^\s+//;
@@ -255,44 +255,48 @@ sub sftp_upload {
         $enddate =~ s/\s+$//;
         $enddate = eval { dt_from_string($enddate) };
     }
-    
+
     # Get transport configuration
-    my $transport = Koha::File::Transports->find(
-        $self->retrieve_data('transport_server') 
-    );
-    
+    my $transport =
+      Koha::File::Transports->find( $self->retrieve_data('transport_server') );
+
     unless ($transport) {
         print $cgi->header('application/json');
         print '{"success": false, "message": "No SFTP transport configured"}';
         return;
     }
-    
+
     # Generate report
     my $filename = $self->_generate_filename($type);
-    my $report = $self->_generate_report( $startdate, $enddate, $type, $filename );
-    
+    my $report =
+      $self->_generate_report( $startdate, $enddate, $type, $filename );
+
     unless ($report) {
         print $cgi->header('application/json');
         print '{"success": false, "message": "Failed to generate report"}';
         return;
     }
-    
+
     # Upload to SFTP
     eval {
         $transport->connect;
         open my $fh, '<', \$report;
         my $upload_result = $transport->file_upload( $fh, $filename );
         close $fh;
-        
+
         if ($upload_result) {
             print $cgi->header('application/json');
-            print '{"success": true, "message": "File uploaded successfully to SFTP server", "filename": "' . $filename . '"}';
-        } else {
+            print
+'{"success": true, "message": "File uploaded successfully to SFTP server", "filename": "'
+              . $filename . '"}';
+        }
+        else {
             print $cgi->header('application/json');
-            print '{"success": false, "message": "Failed to upload file to SFTP server"}';
+            print
+'{"success": false, "message": "Failed to upload file to SFTP server"}';
         }
     };
-    
+
     if ($@) {
         print $cgi->header('application/json');
         print '{"success": false, "message": "SFTP upload error: ' . $@ . '"}';
@@ -392,25 +396,27 @@ sub _generate_invoices_report {
                     $description = $biblio->title || $description;
                 }
 
-                # Build line records with new format (15 fields)
-                # Line record: INVOICE_NUMBER, then empty fields for header data, then line-specific data
+# Build line records with new format (15 fields)
+# Line record: INVOICE_NUMBER, then empty fields for header data, then line-specific data
                 for my $qty_unit ( 1 .. $quantity ) {
                     push @orderlines, [
-                        $invoice->invoicenumber,              # INVOICE_NUMBER
-                        "",                                   # INVOICE_TOTAL (empty for line)
-                        "",                                   # INVOICE_DATE (empty for line)
-                        "",                                   # SUPPLIER_NUMBER_PROPERTY_KEY (empty for line)
-                        "",                                   # CONTRACT_NUMBER (empty for line)
-                        "",                                   # SHIPMENT_DATE (empty for line)
-                        $unitprice,                           # LINE_AMOUNT
-                        $tax_value_on_receiving,              # TAX_AMOUNT
-                        $tax_code,                            # TAX_CODE
-                        $description,                         # DESCRIPTION
-                        $self->_get_acquisitions_costcenter(), # COST_CENTRE_PROPERTY_KEY
-                        $self->_get_acquisitions_objective(),  # OBJECTIVE
-                        $self->_get_acquisitions_subjective(), # SUBJECTIVE
-                        $self->_get_acquisitions_subanalysis($budget_code), # SUBANALYSIS
-                        $line_count                           # LIN_NUM
+                        $invoice->invoicenumber,    # INVOICE_NUMBER
+                        "",    # INVOICE_TOTAL (empty for line)
+                        "",    # INVOICE_DATE (empty for line)
+                        "",    # SUPPLIER_NUMBER_PROPERTY_KEY (empty for line)
+                        "",    # CONTRACT_NUMBER (empty for line)
+                        "",    # SHIPMENT_DATE (empty for line)
+                        $unitprice,                 # LINE_AMOUNT
+                        $tax_value_on_receiving,    # TAX_AMOUNT
+                        $tax_code,                  # TAX_CODE
+                        $description,               # DESCRIPTION
+                        $self->_get_acquisitions_costcenter()
+                        ,                           # COST_CENTRE_PROPERTY_KEY
+                        $self->_get_acquisitions_objective(),     # OBJECTIVE
+                        $self->_get_acquisitions_subjective(),    # SUBJECTIVE
+                        $self->_get_acquisitions_subanalysis($budget_code)
+                        ,                                         # SUBANALYSIS
+                        $line_count                               # LIN_NUM
                     ];
                 }
             }
@@ -426,26 +432,28 @@ sub _generate_invoices_report {
             # Make invoice total negative for AP
             $invoice_total *= -1;
 
-            # Build header record with new format (15 fields)
-            # Header record: INVOICE_NUMBER, INVOICE_TOTAL, INVOICE_DATE, SUPPLIER_NUMBER_PROPERTY_KEY, CONTRACT_NUMBER, SHIPMENT_DATE, then empty fields
+# Build header record with new format (15 fields)
+# Header record: INVOICE_NUMBER, INVOICE_TOTAL, INVOICE_DATE, SUPPLIER_NUMBER_PROPERTY_KEY, CONTRACT_NUMBER, SHIPMENT_DATE, then empty fields
             $csv->print(
                 $fh,
                 [
-                    $invoice->invoicenumber,              # INVOICE_NUMBER
-                    $invoice_total,                       # INVOICE_TOTAL
-                    $self->_format_oracle_date( $invoice->closedate ), # INVOICE_DATE
-                    $supplier_number,                     # SUPPLIER_NUMBER_PROPERTY_KEY
-                    "C50335",                            # CONTRACT_NUMBER
-                    $self->_format_oracle_date( $invoice->shipmentdate ), # SHIPMENT_DATE
-                    "",                                   # LINE_AMOUNT (empty for header)
-                    "",                                   # TAX_AMOUNT (empty for header)
-                    "",                                   # TAX_CODE (empty for header)
-                    "",                                   # DESCRIPTION (empty for header)
-                    "",                                   # COST_CENTRE_PROPERTY_KEY (empty for header)
-                    "",                                   # OBJECTIVE (empty for header)
-                    "",                                   # SUBJECTIVE (empty for header)
-                    "",                                   # SUBANALYSIS (empty for header)
-                    ""                                    # LIN_NUM (empty for header)
+                    $invoice->invoicenumber,    # INVOICE_NUMBER
+                    $invoice_total,             # INVOICE_TOTAL
+                    $self->_format_oracle_date( $invoice->closedate )
+                    ,                           # INVOICE_DATE
+                    $supplier_number,           # SUPPLIER_NUMBER_PROPERTY_KEY
+                    "C50335",                   # CONTRACT_NUMBER
+                    $self->_format_oracle_date( $invoice->shipmentdate )
+                    ,      # SHIPMENT_DATE
+                    "",    # LINE_AMOUNT (empty for header)
+                    "",    # TAX_AMOUNT (empty for header)
+                    "",    # TAX_CODE (empty for header)
+                    "",    # DESCRIPTION (empty for header)
+                    "",    # COST_CENTRE_PROPERTY_KEY (empty for header)
+                    "",    # OBJECTIVE (empty for header)
+                    "",    # SUBJECTIVE (empty for header)
+                    "",    # SUBANALYSIS (empty for header)
+                    ""     # LIN_NUM (empty for header)
                 ]
             );
 
@@ -550,22 +558,29 @@ sub _generate_income_report {
     ( my $filename_no_ext = $filename ) =~ s/\.csv$//;
 
     # Build date filtering conditions for cashup-style approach
-    my $dtf = Koha::Database->new->schema->storage->datetime_parser;
+    my $dtf             = Koha::Database->new->schema->storage->datetime_parser;
     my $date_conditions = {};
-    
+
     if ( $startdate && $enddate ) {
-        my $start_dt = $startdate->clone->set( hour => 0, minute => 0, second => 0 );
-        my $end_dt = $enddate->clone->set( hour => 23, minute => 59, second => 59 );
+        my $start_dt =
+          $startdate->clone->set( hour => 0, minute => 0, second => 0 );
+        my $end_dt =
+          $enddate->clone->set( hour => 23, minute => 59, second => 59 );
         $date_conditions->{'date'} = {
-            '-between' => [ $dtf->format_datetime($start_dt), $dtf->format_datetime($end_dt) ]
+            '-between' => [
+                $dtf->format_datetime($start_dt),
+                $dtf->format_datetime($end_dt)
+            ]
         };
     }
     elsif ($startdate) {
-        my $start_dt = $startdate->clone->set( hour => 0, minute => 0, second => 0 );
+        my $start_dt =
+          $startdate->clone->set( hour => 0, minute => 0, second => 0 );
         $date_conditions->{'date'} = { '>=', $dtf->format_datetime($start_dt) };
     }
     elsif ($enddate) {
-        my $end_dt = $enddate->clone->set( hour => 23, minute => 59, second => 59 );
+        my $end_dt =
+          $enddate->clone->set( hour => 23, minute => 59, second => 59 );
         $date_conditions->{'date'} = { '<=', $dtf->format_datetime($end_dt) };
     }
 
@@ -574,9 +589,10 @@ sub _generate_income_report {
     my $income_transactions = Koha::Account::Lines->search(
         {
             %{$date_conditions},
-            debit_type_code => undef,  # Only credits
-            amount => { '<', 0 },       # Negative amounts (credits)
-            description => { 'NOT LIKE' => '%Pay360%' }  # FIXME: Exclude Pay360 payments
+            debit_type_code => undef,         # Only credits
+            amount          => { '<', 0 },    # Negative amounts (credits)
+            description     =>
+              { 'NOT LIKE' => '%Pay360%' }    # FIXME: Exclude Pay360 payments
         }
     );
 
@@ -584,49 +600,37 @@ sub _generate_income_report {
     my $income_summary = Koha::Account::Offsets->search(
         {
             'me.credit_id' => {
-                '-in' => $income_transactions->_resultset->get_column('accountlines_id')->as_query
+                '-in' => $income_transactions->_resultset->get_column(
+                    'accountlines_id')->as_query
             },
             'me.debit_id' => { '!=' => undef }
         },
         {
-            join => [ 
+            join => [
                 { 'credit' => 'credit_type_code' },
-                { 'debit' => 'debit_type_code' }
+                { 'debit'  => 'debit_type_code' }
             ],
             group_by => [
-                'credit.branchcode',
-                'credit.credit_type_code', 
-                'credit_type_code.description',
-                'debit.debit_type_code',
-                'debit_type_code.description',
-                'credit.payment_type',
+                'credit.branchcode',            'credit.credit_type_code',
+                'credit_type_code.description', 'debit.debit_type_code',
+                'debit_type_code.description',  'credit.payment_type',
                 { 'DATE' => 'credit.date' }
             ],
             'select' => [
-                { sum => 'me.amount' },
-                'credit.branchcode',
-                'credit.credit_type_code',
-                'credit_type_code.description',
-                'debit.debit_type_code', 
-                'debit_type_code.description',
-                'credit.payment_type',
-                { 'DATE' => 'credit.date' }
+                { sum => 'me.amount' },    'credit.branchcode',
+                'credit.credit_type_code', 'credit_type_code.description',
+                'debit.debit_type_code',   'debit_type_code.description',
+                'credit.payment_type', { 'DATE' => 'credit.date' }
             ],
             'as' => [
-                'total_amount',
-                'branchcode',
-                'credit_type_code',
-                'credit_description',
-                'debit_type_code',
-                'debit_description', 
-                'payment_type',
-                'transaction_date'
+                'total_amount',     'branchcode',
+                'credit_type_code', 'credit_description',
+                'debit_type_code',  'debit_description',
+                'payment_type',     'transaction_date'
             ],
             order_by => [
-                { '-desc' => 'credit.date' },
-                'credit.branchcode',
-                'credit.credit_type_code',
-                'debit.debit_type_code'
+                { '-desc' => 'credit.date' }, 'credit.branchcode',
+                'credit.credit_type_code',    'debit.debit_type_code'
             ]
         }
     );
@@ -640,48 +644,53 @@ sub _generate_income_report {
 
         # Process the offset-based aggregated data
         while ( my $row = $income_summary->next ) {
-            my $amount = $row->get_column('total_amount') * -1;  # Reverse sign for income
-            my $amount_pence = int( $amount * 100 );            # Convert to pence
-            
-            next if $amount_pence <= 0;  # Skip zero or negative amounts
+            my $amount =
+              $row->get_column('total_amount') * -1;   # Reverse sign for income
+            my $amount_pence = int( $amount * 100 );   # Convert to pence
 
-            my $library = $row->get_column('branchcode') || 'UNKNOWN';
-            my $credit_type = $row->get_column('credit_type_code');
-            my $debit_type = $row->get_column('debit_type_code');
+            next if $amount_pence <= 0;    # Skip zero or negative amounts
+
+            my $library      = $row->get_column('branchcode') || 'UNKNOWN';
+            my $credit_type  = $row->get_column('credit_type_code');
+            my $debit_type   = $row->get_column('debit_type_code');
             my $payment_type = $row->get_column('payment_type') || 'UNKNOWN';
-            my $date = $row->get_column('transaction_date');
+            my $date         = $row->get_column('transaction_date');
 
             # Generate document reference based on aggregation
             my $doc_reference = "AGG" . sprintf( "%06d", $line_number );
 
             # Generate document description using new format
-            my $doc_description = 
-                dt_from_string( $date )->strftime('%b%d/%y') . "/"
+            my $doc_description =
+                dt_from_string($date)->strftime('%b%d/%y') . "/"
               . $library
               . "-LIB-Income";
 
             # Get accounting date in Oracle format
-            my $accounting_date = $self->_format_oracle_date( $date );
+            my $accounting_date = $self->_format_oracle_date($date);
 
             # Get GL code mappings from branch additional fields
-            my $branch_fields = $self->_get_branch_additional_fields( $library );
-            my $cost_centre = $branch_fields->{cost_center} || "RN03";    # Default RN03 for libraries
-            my $objective   = $self->_get_income_objective( $library );
-            my $subjective  = $self->_get_income_subjective( $debit_type );
-            my $subanalysis = $self->_get_income_subanalysis( $debit_type );
+            my $branch_fields = $self->_get_branch_additional_fields($library);
+            my $cost_centre   = $branch_fields->{cost_center}
+              || "RN03";    # Default RN03 for libraries
+            my $objective   = $self->_get_income_objective($library);
+            my $subjective  = $self->_get_income_subjective($debit_type);
+            my $subanalysis = $self->_get_income_subanalysis($debit_type);
 
             # Get offset fields
-            my $cost_centre_offset = $self->_get_income_costcenter( $debit_type );
-            my $objective_offset   = $self->_get_objective_offset( $debit_type );
-            my $subjective_offset  = $self->_get_subjective_offset( $debit_type );
-            my $subanalysis_offset = $self->_get_subanalysis_offset( $debit_type );
+            my $cost_centre_offset = $self->_get_income_costcenter($debit_type);
+            my $objective_offset   = $self->_get_objective_offset($debit_type);
+            my $subjective_offset  = $self->_get_subjective_offset($debit_type);
+            my $subanalysis_offset =
+              $self->_get_subanalysis_offset($debit_type);
 
             # Get VAT information using new codes
-            my $vat_code = $self->_get_debit_type_vat_code( $debit_type );
-            my $vat_amount = $self->_calculate_vat_amount_new( $amount, $vat_code );
+            my $vat_code = $self->_get_debit_type_vat_code($debit_type);
+            my $vat_amount =
+              $self->_calculate_vat_amount_new( $amount, $vat_code );
 
             # Map payment type to standard format
-            my $mapped_payment_type = $self->_map_credit_type_to_payment_type($credit_type);
+            my $mapped_payment_type =
+              $self->_map_credit_type_to_payment_type($credit_type);
 
             # Create line description in format: "[Payment Type] [Item Type]"
             my $line_description = $mapped_payment_type . " " . $debit_type;
@@ -694,7 +703,7 @@ sub _generate_income_report {
                     $doc_reference,      # 1. D_Document Document Number
                     $doc_description,    # 2. D_Document Description
                     $accounting_date,    # 3. D_Document Date
-                    $line_number,        # 4. D_Line Number
+                    1,                   # 4. D_Line Number
                     $amount_pence,       # 5. D_Line Amount (positive, in pence)
                     $cost_centre,        # 6. D_Cost Centre
                     $objective,          # 7. D_Objective
@@ -710,7 +719,7 @@ sub _generate_income_report {
                 ]
             );
 
-            ##$line_number++; # NOTE: As we're aggregating for them, they just want 1 here for all
+            $line_number++;
         }
 
         close $fh;
@@ -882,41 +891,45 @@ sub _map_credit_type_to_payment_type {
     return $map->{$credit_type} || 'CASH';
 }
 
-# Get branch additional field values with caching  
+# Get branch additional field values with caching
 sub _get_branch_additional_fields {
     my ( $self, $branch_code ) = @_;
-    
+
     # Return cached result if available
-    return $self->{branch_fields_cache}->{$branch_code} 
-        if exists $self->{branch_fields_cache}->{$branch_code};
-    
+    return $self->{branch_fields_cache}->{$branch_code}
+      if exists $self->{branch_fields_cache}->{$branch_code};
+
     # Get additional fields for branches
-    my $additional_fields = Koha::AdditionalFields->search({
-        tablename => 'branches',
-        name => [ 'objective', 'cost_center' ]
-    });
-    
+    my $additional_fields = Koha::AdditionalFields->search(
+        {
+            tablename => 'branches',
+            name      => [ 'objective', 'cost_center' ]
+        }
+    );
+
     my $fields = {};
-    
+
     # Get field values for this branch
     while ( my $field = $additional_fields->next ) {
-        my $field_value = Koha::AdditionalFieldValues->search({
-            field_id => $field->id,
-            record_id => $branch_code
-        })->next;
-        
+        my $field_value = Koha::AdditionalFieldValues->search(
+            {
+                field_id  => $field->id,
+                record_id => $branch_code
+            }
+        )->next;
+
         if ($field_value) {
-            $fields->{$field->name} = $field_value->value;
+            $fields->{ $field->name } = $field_value->value;
         }
     }
-    
+
     # Set defaults if not found in database
-    $fields->{objective} //= 'CUL074';  # Default to Central Admin
-    $fields->{cost_center} //= 'RN03';  # Default cost center for libraries
-    
+    $fields->{objective}   //= 'CUL074';    # Default to Central Admin
+    $fields->{cost_center} //= 'RN03';      # Default cost center for libraries
+
     # Cache the result
     $self->{branch_fields_cache}->{$branch_code} = $fields;
-    
+
     return $fields;
 }
 
@@ -1023,39 +1036,43 @@ sub _get_subanalysis_offset {
 # Get additional field values for a debit type with caching
 sub _get_debit_type_additional_fields {
     my ( $self, $debit_type_code ) = @_;
-    
+
     # Return cached result if available
-    return $self->{debit_type_fields_cache}->{$debit_type_code} 
-        if exists $self->{debit_type_fields_cache}->{$debit_type_code};
-    
+    return $self->{debit_type_fields_cache}->{$debit_type_code}
+      if exists $self->{debit_type_fields_cache}->{$debit_type_code};
+
     # Get additional fields for account_debit_types
-    my $additional_fields = Koha::AdditionalFields->search({
-        tablename => 'account_debit_types',
-        name => [ 'vat_code', 'income_code', 'extra_code' ]
-    });
-    
+    my $additional_fields = Koha::AdditionalFields->search(
+        {
+            tablename => 'account_debit_types',
+            name      => [ 'vat_code', 'income_code', 'extra_code' ]
+        }
+    );
+
     my $fields = {};
-    
+
     # Get field values for this debit type
     while ( my $field = $additional_fields->next ) {
-        my $field_value = Koha::AdditionalFieldValues->search({
-            field_id => $field->id,
-            record_id => $debit_type_code
-        })->next;
-        
+        my $field_value = Koha::AdditionalFieldValues->search(
+            {
+                field_id  => $field->id,
+                record_id => $debit_type_code
+            }
+        )->next;
+
         if ($field_value) {
-            $fields->{$field->name} = $field_value->value;
+            $fields->{ $field->name } = $field_value->value;
         }
     }
-    
+
     # Set defaults if not found in database
-    $fields->{vat_code} //= 'O';  # Default to OUT OF SCOPE
-    $fields->{income_code} //= '5435';  # Default income code
-    $fields->{extra_code} //= '';  # Default to empty
-    
+    $fields->{vat_code}    //= 'O';       # Default to OUT OF SCOPE
+    $fields->{income_code} //= '5435';    # Default income code
+    $fields->{extra_code}  //= '';        # Default to empty
+
     # Cache the result
     $self->{debit_type_fields_cache}->{$debit_type_code} = $fields;
-    
+
     return $fields;
 }
 
@@ -1063,17 +1080,17 @@ sub _get_debit_type_vat_code {
     my ( $self, $debit_type ) = @_;
 
     # Get VAT code from additional fields
-    my $fields = $self->_get_debit_type_additional_fields($debit_type);
+    my $fields   = $self->_get_debit_type_additional_fields($debit_type);
     my $vat_code = $fields->{vat_code} || 'O';
-    
+
     # Map database VAT codes to Oracle format
     my $vat_map = {
         'S' => 'STANDARD',
-        'Z' => 'ZERO', 
+        'Z' => 'ZERO',
         'E' => 'EXEMPT',
         'O' => 'OUT OF SCOPE',
     };
-    
+
     return $vat_map->{$vat_code} || 'OUT OF SCOPE';
 }
 

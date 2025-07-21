@@ -710,7 +710,7 @@ sub _generate_income_report {
                 ]
             );
 
-            $line_number++;
+            ##$line_number++; # NOTE: As we're aggregating for them, they just want 1 here for all
         }
 
         close $fh;

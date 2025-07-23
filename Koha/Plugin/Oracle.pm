@@ -396,8 +396,7 @@ sub _generate_invoices_report {
                     $description = $biblio->title || $description;
                 }
 
-# Build line records with new format (15 fields)
-# Line record: INVOICE_NUMBER, then empty fields for header data, then line-specific data
+                # Line record: INVOICE_NUMBER, then empty fields for header data, then line-specific data
                 for my $qty_unit ( 1 .. $quantity ) {
                     push @orderlines, [
                         $invoice->invoicenumber,    # INVOICE_NUMBER
@@ -416,7 +415,7 @@ sub _generate_invoices_report {
                         $self->_get_acquisitions_subjective(),    # SUBJECTIVE
                         $self->_get_acquisitions_subanalysis($budget_code)
                         ,                                         # SUBANALYSIS
-                        $line_count                               # LIN_NUM
+                        $line_count++                               # LIN_NUM
                     ];
                 }
             }

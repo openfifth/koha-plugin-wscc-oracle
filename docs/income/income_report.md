@@ -42,6 +42,9 @@
 
 ## Koha Field mappings
 
+Confirmation required for where we should map Cost Centre, Objective, Subjective, Subanalysis and Offsets from.
+Which are 'Library' level, which are 'Debit type' level and are any 'Register' or any other level.
+
 ## Additional notes
 
 - Koha should post the sum of transactions per library per debit type per receipt type (configurable as payment type in Koha) per day.

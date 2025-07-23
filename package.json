@@ -1,13 +1,35 @@
 {
-  "name": "koha-plugin-template",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "release": "bash ./release_kpz.sh"
+  "name": "koha-plugin-wscc-oracle",
+  "version": "0.0.18",
+  "previous_version": "0.0.17",
+  "description": "A Koha plugin to manage finance integration with Oracle for WSCC",
+  "plugin": {
+    "module": "Koha::Plugin::Oracle",
+    "pm_path": "Koha/Plugin/Oracle.pm"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "scripts": {
+    "version:patch": "node increment_version.js patch | cat",
+    "version:minor": "node increment_version.js minor | cat",
+    "version:major": "node increment_version.js major | cat",
+    "release:patch": "node increment_version.js patch | cat && git add . && git commit -m 'chore: bump version' && VERSION=$(node -p 'require(\"./package.json\").version') && git tag -a v$VERSION -m \"Release v$VERSION\" && git push origin main --follow-tags",
+    "release:minor": "node increment_version.js minor | cat && git add . && git commit -m 'chore: bump version' && VERSION=$(node -p 'require(\"./package.json\").version') && git tag -a v$VERSION -m \"Release v$VERSION\" && git push origin main --follow-tags",
+    "release:major": "node increment_version.js major | cat && git add . && git commit -m 'chore: bump version' && VERSION=$(node -p 'require(\"./package.json\").version') && git tag -a v$VERSION -m \"Release v$VERSION\" && git push origin main --follow-tags"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openfifth/koha-plugin-wscc-oracle.git"
+  },
+  "author": "Open Fifth",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/openfifth/koha-plugin-wscc-oracle/issues"
+  },
+  "homepage": "https://github.com/openfifth/koha-plugin-wscc-oracle#readme",
+  "keywords": [
+    "koha",
+    "plugin",
+    "oracle",
+    "finance",
+    "integration"
+  ]
 }

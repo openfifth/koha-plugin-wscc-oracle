@@ -1,4 +1,3 @@
-# koha-plugin-template
+# koha-plugin-wscc-oracle
 
-A plugin to manage invoice and cash management exports to Oracle finance for
-WSCC.
+A Koha plugin to manage finance integration with SAP for West Sussex County Council (WSCC).

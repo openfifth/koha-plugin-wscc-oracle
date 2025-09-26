@@ -1,7 +1,7 @@
 {
   "name": "koha-plugin-wscc-oracle",
-  "version": "0.0.18",
-  "previous_version": "0.0.17",
+  "version": "0.0.19",
+  "previous_version": "0.0.18",
   "description": "A Koha plugin to manage finance integration with Oracle for WSCC",
   "plugin": {
     "module": "Koha::Plugin::Com::OpenFifth::Oracle",

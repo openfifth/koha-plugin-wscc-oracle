@@ -11,21 +11,11 @@ on:
 
 jobs:
   unit_tests:
-    name: Run unit tests
+    name: Run unit tests (24.11.wscc)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        koha-version: [main, stable, oldstable]
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Get Koha Version Branch Name
-        id: koha-version
-        uses: "bywatersolutions/github-action-koha-get-version-by-label@master"
-        with:
-          version-label: "${{ matrix.koha-version }}"
 
       - name: Check out Koha
         run: |
@@ -60,6 +50,10 @@ jobs:
           mkdir -p env
           wget -O env/defaults.env https://gitlab.com/koha-community/koha-testing-docker/raw/main/env/defaults.env
           cp env/defaults.env .env
+          # Configure misc4dev for custom Koha repository
+          sed -i 's/DEBUG_GIT_REPO_MISC4DEV=no/DEBUG_GIT_REPO_MISC4DEV=yes/' .env
+          sed -i 's/^DEBUG_GIT_REPO_MISC4DEV_URL=.*/DEBUG_GIT_REPO_MISC4DEV_URL=https:\/\/github.com\/Jacobomara901\/koha-misc4dev.git/' .env
+          sed -i 's/^DEBUG_GIT_REPO_MISC4DEV_BRANCH=.*/DEBUG_GIT_REPO_MISC4DEV_BRANCH=master/' .env
           docker compose pull
 
       - name: Run tests

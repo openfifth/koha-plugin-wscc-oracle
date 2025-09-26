@@ -4,8 +4,8 @@
   "previous_version": "0.0.17",
   "description": "A Koha plugin to manage finance integration with Oracle for WSCC",
   "plugin": {
-    "module": "Koha::Plugin::Oracle",
-    "pm_path": "Koha/Plugin/Oracle.pm"
+    "module": "Koha::Plugin::Com::OpenFifth::Oracle",
+    "pm_path": "Koha/Plugin/Com/OpenFifth/Oracle.pm"
   },
   "scripts": {
     "version:patch": "node increment_version.js patch | cat",

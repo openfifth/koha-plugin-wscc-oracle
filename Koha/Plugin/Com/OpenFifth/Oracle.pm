@@ -1,4 +1,4 @@
-package Koha::Plugin::Oracle;
+package Koha::Plugin::Com::OpenFifth::Oracle;
 
 use Modern::Perl;
 
@@ -26,7 +26,7 @@ our $metadata = {
     date_authored   => '2025-04-24',
     date_updated    => '2025-04-24',
     minimum_version => '24.11.00.000',
-    maximum_version => '24.11',
+    maximum_version => '25.05.00.000',
     version         => $VERSION,
     description     =>
       'A plugin to manage finance integration for WSCC with Oracle',
@@ -128,7 +128,7 @@ sub cronjob_nightly {
         if ( $output eq 'upload' ) {
             $transport->connect;
             open my $fh, '<', \$report;
-            if ( $transport->file_upload( $fh, $filename ) ) {
+            if ( $transport->upload_file( $fh, $filename ) ) {
                 close $fh;
                 return 1;
             }
@@ -396,7 +396,7 @@ sub _generate_invoices_report {
                     $description = $biblio->title || $description;
                 }
 
-                # Line record: INVOICE_NUMBER, then empty fields for header data, then line-specific data
+# Line record: INVOICE_NUMBER, then empty fields for header data, then line-specific data
                 for my $qty_unit ( 1 .. $quantity ) {
                     push @orderlines, [
                         $invoice->invoicenumber,    # INVOICE_NUMBER
@@ -415,7 +415,7 @@ sub _generate_invoices_report {
                         $self->_get_acquisitions_subjective(),    # SUBJECTIVE
                         $self->_get_acquisitions_subanalysis($budget_code)
                         ,                                         # SUBANALYSIS
-                        $line_count++                               # LIN_NUM
+                        $line_count++                             # LIN_NUM
                     ];
                 }
             }
@@ -966,6 +966,9 @@ sub _get_income_subanalysis {
 
 sub _get_income_costcenter {
     my ( $self, $debit_type ) = @_;
+
+    # Default to a branch level, but some may have a debit
+    # level specified which should overrule the branch
 
     # Map item types to cost centre offset codes
     # Using sample data from requirements

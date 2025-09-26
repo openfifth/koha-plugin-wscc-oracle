@@ -60,6 +60,9 @@ jobs:
           mkdir -p env
           wget -O env/defaults.env https://gitlab.com/koha-community/koha-testing-docker/raw/main/env/defaults.env
           cp env/defaults.env .env
+          # Configure misc4dev for custom Koha repository
+          sed -i 's/DEBUG_GIT_REPO_MISC4DEV=no/DEBUG_GIT_REPO_MISC4DEV=yes/' .env
+          sed -i 's/^DEBUG_GIT_REPO_MISC4DEV_URL=.*/DEBUG_GIT_REPO_MISC4DEV_URL=https:\/\/github.com\/Jacobomara901\/koha-misc4dev.git/' .env
           docker compose pull
 
       - name: Run tests

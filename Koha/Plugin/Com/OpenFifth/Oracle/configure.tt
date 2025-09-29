@@ -37,6 +37,67 @@
         <div class="col-md-10 order-md-2 order-sm-1">
             <main>
                 <h1>Oracle Report - Configuration</h1>
+
+                <div class="alert alert-info">
+                    <h4>Oracle Integration Field Mappings</h4>
+                    <p>This plugin generates CSV reports for Oracle Finance integration using Chart of Accounts (COA) mappings. Field values are resolved through a combination of configuration settings and Koha's additional fields system.</p>
+
+                    <h5>Additional Fields Configuration</h5>
+                    <p>The plugin uses additional fields to provide dynamic mapping of financial codes. These must be configured in Koha's Additional Fields administration before use:</p>
+
+                    <h6>For Account Debit Types (<code>account_debit_types</code> table)</h6>
+                    <ul>
+                        <li><strong>vat_code</strong>: VAT classification codes
+                            <ul>
+                                <li><code>S</code> = Standard rate (20%)</li>
+                                <li><code>Z</code> = Zero rate (0%)</li>
+                                <li><code>E</code> = Exempt</li>
+                                <li><code>O</code> = Out of Scope (default)</li>
+                            </ul>
+                        </li>
+                        <li><strong>income_code</strong>: Subanalysis code for income transactions (default: 5435)</li>
+                        <li><strong>extra_code</strong>: Additional codes as needed for future requirements</li>
+                    </ul>
+
+                    <h6>For Library Branches (<code>branches</code> table)</h6>
+                    <ul>
+                        <li><strong>objective</strong>: Library-specific objective codes (e.g., CUL001, CUL002, default: CUL074)</li>
+                        <li><strong>income_costcenter</strong>: Cost center codes for income transactions (default: RN03)</li>
+                        <li><strong>acquisitions_costcenter</strong>: Cost center codes for acquisitions invoices (default: RN05, see acquisitions setting below)</li>
+                    </ul>
+
+                    <h5>Report Types and Field Resolution</h5>
+
+                    <h6>Income Report Fields</h6>
+                    <p>Generated from library transaction data (<code>account_lines</code>, <code>account_offsets</code>):</p>
+                    <ul>
+                        <li><strong>Cost Centre</strong>: From branch additional field <code>income_costcenter</code> (default: RN03)</li>
+                        <li><strong>Objective</strong>: From branch additional field <code>objective</code> (default: CUL074)</li>
+                        <li><strong>Subjective</strong>: Hardcoded mapping based on debit type (841800 for fines, 841850 for book sales)</li>
+                        <li><strong>Subanalysis</strong>: From debit type additional field <code>income_code</code> (default: 5435)</li>
+                        <li><strong>VAT Code/Amount</strong>: From debit type additional field <code>vat_code</code> with rate calculation</li>
+                    </ul>
+
+                    <h6>Acquisitions Invoice Report Fields</h6>
+                    <p>Generated from acquisition data (<code>aqinvoices</code>, <code>aqorders</code>, <code>aqbudgets</code>):</p>
+                    <ul>
+                        <li><strong>Cost Centre</strong>:
+                            <ol>
+                                <li>From branch additional field <code>acquisitions_costcenter</code> via order → fund → budget_branchcode</li>
+                                <li>From configured default below</li>
+                                <li>Hardcoded fallback: RN05</li>
+                            </ol>
+                        </li>
+                        <li><strong>Objective</strong>: Hardcoded default ZZZ999</li>
+                        <li><strong>Subjective</strong>: Hardcoded default 503000</li>
+                        <li><strong>Subanalysis</strong>: Mapped from fund code using internal lookup table</li>
+                        <li><strong>Supplier Number</strong>: Mapped from fund code using internal lookup table</li>
+                    </ul>
+
+                    <h5>Chart of Accounts (COA) Validation</h5>
+                    <p><strong>Important:</strong> Oracle Finance requires valid COA combinations. Invalid combinations will cause "COA combination errors" during import. Ensure all code combinations are pre-approved in your Oracle system before use.</p>
+                </div>
+
                 <form method="get">
                     <input type="hidden" name="class" value="[% CLASS %]"/>
                     <input type="hidden" name="method" value="[% METHOD %]"/>

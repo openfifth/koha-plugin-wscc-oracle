@@ -39,64 +39,9 @@
                 <h1>Oracle Report - Configuration</h1>
 
                 <div class="alert alert-info">
-                    <h4>Oracle Integration Field Mappings</h4>
+                    <h4>Oracle Integration Overview</h4>
                     <p>This plugin generates CSV reports for Oracle Finance integration using Chart of Accounts (COA) mappings. Field values are resolved through a combination of configuration settings and Koha's additional fields system.</p>
 
-                    <h5>Additional Fields Configuration</h5>
-                    <p>The plugin uses additional fields to provide dynamic mapping of financial codes. These must be configured in Koha's Additional Fields administration before use:</p>
-
-                    <p><strong>Note:</strong> Fund code to subanalysis mapping is configured directly in this plugin interface below, as Koha does not yet support additional fields for the acquisitions funds table.</p>
-
-                    <h6>For Account Debit Types (<code>account_debit_types</code> table)</h6>
-                    <ul>
-                        <li><strong>vat_code</strong>: VAT classification codes
-                            <ul>
-                                <li><code>S</code> = Standard rate (20%)</li>
-                                <li><code>Z</code> = Zero rate (0%)</li>
-                                <li><code>E</code> = Exempt</li>
-                                <li><code>O</code> = Out of Scope (default)</li>
-                            </ul>
-                        </li>
-                        <li><strong>income_code</strong>: Subanalysis code for income transactions (default: 5435)</li>
-                        <li><strong>extra_code</strong>: Additional codes as needed for future requirements</li>
-                    </ul>
-
-                    <h6>For Library Branches (<code>branches</code> table)</h6>
-                    <ul>
-                        <li><strong>objective</strong>: Library-specific objective codes (e.g., CUL001, CUL002, default: CUL074)</li>
-                        <li><strong>income_costcenter</strong>: Cost center codes for income transactions (default: RN03)</li>
-                        <li><strong>acquisitions_costcenter</strong>: Cost center codes for acquisitions invoices (default: RN05, see acquisitions setting below)</li>
-                    </ul>
-
-                    <h5>Report Types and Field Resolution</h5>
-
-                    <h6>Income Report Fields</h6>
-                    <p>Generated from library transaction data (<code>account_lines</code>, <code>account_offsets</code>):</p>
-                    <ul>
-                        <li><strong>Cost Centre</strong>: From branch additional field <code>income_costcenter</code> (default: RN03)</li>
-                        <li><strong>Objective</strong>: From branch additional field <code>objective</code> (default: CUL074)</li>
-                        <li><strong>Subjective</strong>: Hardcoded mapping based on debit type (841800 for fines, 841850 for book sales)</li>
-                        <li><strong>Subanalysis</strong>: From debit type additional field <code>income_code</code> (default: 5435)</li>
-                        <li><strong>VAT Code/Amount</strong>: From debit type additional field <code>vat_code</code> with rate calculation</li>
-                    </ul>
-
-                    <h6>Acquisitions Invoice Report Fields</h6>
-                    <p>Generated from acquisition data (<code>aqinvoices</code>, <code>aqorders</code>, <code>aqbudgets</code>):</p>
-                    <ul>
-                        <li><strong>Cost Centre</strong>:
-                            <ol>
-                                <li>From branch additional field <code>acquisitions_costcenter</code> via order → fund → budget_branchcode</li>
-                                <li>From configured default below</li>
-                                <li>Hardcoded fallback: RN05</li>
-                            </ol>
-                        </li>
-                        <li><strong>Objective</strong>: Hardcoded default ZZZ999</li>
-                        <li><strong>Subjective</strong>: Hardcoded default 503000</li>
-                        <li><strong>Subanalysis</strong>: From fund code mapping table below (with configurable default fallback)</li>
-                        <li><strong>Supplier Number</strong>: Mapped from fund code using internal lookup table</li>
-                    </ul>
-
-                    <h5>Chart of Accounts (COA) Validation</h5>
                     <p><strong>Important:</strong> Oracle Finance requires valid COA combinations. Invalid combinations will cause "COA combination errors" during import. Ensure all code combinations are pre-approved in your Oracle system before use.</p>
                 </div>
 
@@ -104,7 +49,7 @@
                     <input type="hidden" name="class" value="[% CLASS %]"/>
                     <input type="hidden" name="method" value="[% METHOD %]"/>
                     <fieldset class="rows">
-                        <legend>Output</legend>
+                        <legend>Report Generation Settings</legend>
                         <ol>
                             <li>
                                 <label for="output">Output to:</label>
@@ -115,9 +60,8 @@
                                 </select>
                             </li>
                         </ol>
-                    </fieldset>
-                    <fieldset class="rows">
-                        <legend>Run days</legend>
+                        <h4>Scheduled Run Days</h4>
+                        <div class="hint">Select which days the automated report generation should run.</div>
                         <ol>
                             <li><input type="checkbox" name="days" value="0" [% IF transport_days.sunday %]checked[% END %]><label> Sunday</label></li>
                             <li><input type="checkbox" name="days" value="1" [% IF transport_days.monday %]checked[% END %]><label> Monday</label></li>
@@ -127,9 +71,50 @@
                             <li><input type="checkbox" name="days" value="5" [% IF transport_days.friday %]checked[% END %]><label> Friday</label></li>
                             <li><input type="checkbox" name="days" value="6" [% IF transport_days.saturday %]checked[% END %]><label> Saturday</label></li>
                         </ol>
+                        <h4>SFTP Upload Configuration</h4>
+                        [% IF available_transports.count %]
+                        <ol>
+                            <li>
+                                <label for="transport_server">(S)FTP server to transfer to:</label>
+                                <select name="transport_server">
+                                [% FOREACH transport IN available_transports %]
+                                    [% IF transport.id == transport_server.id %]
+                                    <option value="[% transport.id %]" selected>[% transport.name %]</option>
+                                    [% ELSE %]
+                                    <option value="[% transport.id %]">[% transport.name %]</option>
+                                    [% END %]
+                                [% END %]
+                                </select>
+                            </li>
+                        </ol>
+                        [% ELSE %]
+                        <div class="alert alert-info">
+                            No transports found, would you like to <a href="/cgi-bin/koha/admin/sftp_servers.pl?op=add_form">add</a> one?
+                        </div>
+                        [% END %]
                     </fieldset>
                     <fieldset class="rows">
-                        <legend>Acquisitions</legend>
+                        <legend>Acquisitions Mappings</legend>
+
+                        <div class="alert alert-info">
+                            <h4>Acquisitions Invoice Report Fields</h4>
+                            <p>Generated from acquisition data (<code>aqinvoices</code>, <code>aqorders</code>, <code>aqbudgets</code>):</p>
+                            <ul>
+                                <li><strong>Cost Centre</strong>:
+                                    <ol>
+                                        <li>From branch additional field <code>acquisitions_costcenter</code> via order → fund → budget_branchcode</li>
+                                        <li>From configured default below</li>
+                                        <li>Hardcoded fallback: RN05</li>
+                                    </ol>
+                                </li>
+                                <li><strong>Objective</strong>: Hardcoded default ZZZ999</li>
+                                <li><strong>Subjective</strong>: Hardcoded default 503000</li>
+                                <li><strong>Subanalysis</strong>: From fund code mapping table below (with configurable default fallback)</li>
+                                <li><strong>Supplier Number</strong>: Mapped from fund code using internal lookup table</li>
+                            </ul>
+                            <p><strong>Note:</strong> Fund code to subanalysis mapping is configured directly below, as Koha does not yet support additional fields for the acquisitions funds table.</p>
+                        </div>
+
                         <ol>
                             <li>
                                 <label for="default_acquisitions_costcenter">Default cost center for acquisitions:</label>
@@ -142,9 +127,8 @@
                                 <span class="hint">Used when no specific mapping is found for a fund code</span>
                             </li>
                         </ol>
-                    </fieldset>
-                    <fieldset class="rows">
-                        <legend>Fund Code to Subanalysis Mappings</legend>
+
+                        <h4>Fund Code to Subanalysis Mappings</h4>
                         <div class="hint">Map fund codes to their corresponding subanalysis codes for Oracle reporting. Empty values will use the default above.</div>
                         [% IF funds.count %]
                         <table class="table table-striped">
@@ -176,27 +160,37 @@
                         [% END %]
                     </fieldset>
                     <fieldset class="rows">
-						<legend>Transport</legend>
-                        [% IF available_transports.count %]
-						<ol>
-                            <li>
-                                <label for="transport_server">(S)FTP server to transfer to:</label>
-                                <select name="transport_server">
-                                [% FOREACH transport IN available_transports %]
-                                    [% IF transport.id == transport_server.id %]
-                                    <option value="[% transport.id %]" selected>[% transport.name %]</option>
-                                    [% ELSE %]
-                                    <option value="[% transport.id %]">[% transport.name %]</option>
-                                    [% END %]
-                                [% END %]
-                                </select>
-                            </li>
-                        </ol>
-                        [% ELSE %]
+                        <legend>Income Mappings</legend>
+
                         <div class="alert alert-info">
-                            No transports found, would you like to <a href="/cgi-bin/koha/admin/sftp_servers.pl?op=add_form">add</a> one?
+                            <h4>Income Report Field Configuration</h4>
+                            <p>Income reports are generated from library transaction data (<code>account_lines</code>, <code>account_offsets</code>).</p>
+
+                            <h5>Additional Fields Required</h5>
+                            <p>These additional fields must be configured in Koha's Additional Fields administration:</p>
+
+                            <h6>For Account Debit Types (<code>account_debit_types</code> table)</h6>
+                            <ul>
+                                <li><strong>vat_code</strong>: VAT classification codes</li>
+                                <li><strong>income_code</strong>: Subanalysis code for income transactions (default: 5435)</li>
+                                <li><strong>extra_code</strong>: Additional codes as needed for future requirements</li>
+                            </ul>
+
+                            <h6>For Library Branches (<code>branches</code> table)</h6>
+                            <ul>
+                                <li><strong>objective</strong>: Library-specific objective codes (e.g., CUL001, CUL002, default: CUL074)</li>
+                                <li><strong>income_costcenter</strong>: Cost center codes for income transactions (default: RN03)</li>
+                            </ul>
+
+                            <h5>Income Report Field Resolution</h5>
+                            <ul>
+                                <li><strong>Cost Centre</strong>: From branch additional field <code>income_costcenter</code> (default: RN03)</li>
+                                <li><strong>Objective</strong>: From branch additional field <code>objective</code> (default: CUL074)</li>
+                                <li><strong>Subjective</strong>: Hardcoded mapping based on debit type (841800 for fines, 841850 for book sales)</li>
+                                <li><strong>Subanalysis</strong>: From debit type additional field <code>income_code</code> (default: 5435)</li>
+                                <li><strong>VAT Code/Amount</strong>: From debit type additional field <code>vat_code</code> with rate calculation</li>
+                            </ul>
                         </div>
-                        [% END %]
                     </fieldset>
                     <fieldset class="action">
                         <input type="hidden" name="save" value="1" />

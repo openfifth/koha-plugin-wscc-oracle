@@ -45,6 +45,8 @@
                     <h5>Additional Fields Configuration</h5>
                     <p>The plugin uses additional fields to provide dynamic mapping of financial codes. These must be configured in Koha's Additional Fields administration before use:</p>
 
+                    <p><strong>Note:</strong> Fund code to subanalysis mapping is configured directly in this plugin interface below, as Koha does not yet support additional fields for the acquisitions funds table.</p>
+
                     <h6>For Account Debit Types (<code>account_debit_types</code> table)</h6>
                     <ul>
                         <li><strong>vat_code</strong>: VAT classification codes
@@ -90,7 +92,7 @@
                         </li>
                         <li><strong>Objective</strong>: Hardcoded default ZZZ999</li>
                         <li><strong>Subjective</strong>: Hardcoded default 503000</li>
-                        <li><strong>Subanalysis</strong>: Mapped from fund code using internal lookup table</li>
+                        <li><strong>Subanalysis</strong>: From fund code mapping table below (with configurable default fallback)</li>
                         <li><strong>Supplier Number</strong>: Mapped from fund code using internal lookup table</li>
                     </ul>
 
@@ -134,7 +136,44 @@
                                 <input type="text" name="default_acquisitions_costcenter" value="[% default_acquisitions_costcenter || 'RN05' %]" maxlength="10" />
                                 <span class="hint">Used when no cost center is found via branch additional fields</span>
                             </li>
+                            <li>
+                                <label for="default_acquisitions_subanalysis">Default subanalysis code for unmapped funds:</label>
+                                <input type="text" name="default_acquisitions_subanalysis" value="[% default_acquisitions_subanalysis || '5999' %]" maxlength="10" />
+                                <span class="hint">Used when no specific mapping is found for a fund code</span>
+                            </li>
                         </ol>
+                    </fieldset>
+                    <fieldset class="rows">
+                        <legend>Fund Code to Subanalysis Mappings</legend>
+                        <div class="hint">Map fund codes to their corresponding subanalysis codes for Oracle reporting. Empty values will use the default above.</div>
+                        [% IF funds.count %]
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Fund Code</th>
+                                    <th>Budget Name</th>
+                                    <th>Subanalysis Code</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                [% WHILE (fund = funds.next) %]
+                                <tr>
+                                    <td><strong>[% fund.budget_code | html %]</strong></td>
+                                    <td>[% fund.budget_name | html %]</td>
+                                    <td>
+                                        <input type="text" name="fund_[% fund.budget_code | html %]"
+                                               value="[% fund_mappings.${fund.budget_code} | html %]"
+                                               maxlength="10" size="8" />
+                                    </td>
+                                </tr>
+                                [% END %]
+                            </tbody>
+                        </table>
+                        [% ELSE %]
+                        <div class="alert alert-warning">
+                            No acquisition funds found. Please ensure you have created acquisition budgets and funds in Koha.
+                        </div>
+                        [% END %]
                     </fieldset>
                     <fieldset class="rows">
 						<legend>Transport</legend>

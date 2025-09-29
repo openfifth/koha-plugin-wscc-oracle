@@ -10,10 +10,11 @@ use Koha::Account::Lines;
 use Koha::Account::Offsets;
 use Koha::AdditionalFields;
 use Koha::AdditionalFieldValues;
+use Koha::Acquisition::Funds;
 
 use File::Spec;
 use List::Util qw(min max);
-use Mojo::JSON qw{ decode_json };
+use Mojo::JSON qw{ decode_json encode_json };
 use Text::CSV  qw( csv );
 use C4::Context;
 
@@ -59,17 +60,33 @@ sub configure {
         my $available_transports = Koha::File::Transports->search();
         my @days_of_week =
           qw(sunday monday tuesday wednesday thursday friday saturday);
+        my $transport_days_data = $self->retrieve_data('transport_days') || '';
         my $transport_days = {
             map  { $days_of_week[$_] => 1 }
             grep { defined $days_of_week[$_] }
-              split( ',', $self->retrieve_data('transport_days') )
+              split( ',', $transport_days_data )
         };
+
+        # Get all acquisition funds for the mapping table
+        my $funds = Koha::Acquisition::Funds->search(
+            {},
+            {
+                order_by => 'budget_code'
+            }
+        );
+
+        # Get existing fund mappings
+        my $fund_mappings_data = $self->retrieve_data('fund_subanalysis_mappings') || '{}';
+        my $fund_mappings = eval { decode_json($fund_mappings_data) } || {};
         $template->param(
-            transport_server               => $self->retrieve_data('transport_server'),
-            transport_days                 => $transport_days,
-            output                         => $self->retrieve_data('output'),
-            available_transports           => $available_transports,
-            default_acquisitions_costcenter => $self->retrieve_data('default_acquisitions_costcenter')
+            transport_server                  => $self->retrieve_data('transport_server'),
+            transport_days                    => $transport_days,
+            output                            => $self->retrieve_data('output'),
+            available_transports              => $available_transports,
+            default_acquisitions_costcenter   => $self->retrieve_data('default_acquisitions_costcenter'),
+            default_acquisitions_subanalysis  => $self->retrieve_data('default_acquisitions_subanalysis'),
+            funds                             => $funds,
+            fund_mappings                     => $fund_mappings
         );
 
         $self->output_html( $template->output() );
@@ -78,12 +95,28 @@ sub configure {
         # Get selected days (returns an array from multiple checkboxes)
         my @selected_days = $cgi->multi_param('days');
         my $days_str      = join( ',', sort { $a <=> $b } @selected_days );
+
+        # Process fund mapping data
+        my %fund_mappings;
+        my @param_names = $cgi->param();
+        for my $param_name (@param_names) {
+            if ($param_name =~ /^fund_(.+)$/) {
+                my $fund_code = $1;
+                my $subanalysis_code = $cgi->param($param_name);
+                if ($subanalysis_code && $subanalysis_code =~ /\S/) {
+                    $fund_mappings{$fund_code} = $subanalysis_code;
+                }
+            }
+        }
+
         $self->store_data(
             {
-                transport_server                => scalar $cgi->param('transport_server'),
-                transport_days                  => $days_str,
-                output                          => scalar $cgi->param('output'),
-                default_acquisitions_costcenter => scalar $cgi->param('default_acquisitions_costcenter')
+                transport_server                  => scalar $cgi->param('transport_server'),
+                transport_days                    => $days_str,
+                output                            => scalar $cgi->param('output'),
+                default_acquisitions_costcenter   => scalar $cgi->param('default_acquisitions_costcenter'),
+                default_acquisitions_subanalysis  => scalar $cgi->param('default_acquisitions_subanalysis'),
+                fund_subanalysis_mappings         => encode_json(\%fund_mappings)
             }
         );
         $self->go_home();
@@ -502,41 +535,20 @@ sub _get_acquisitions_subjective {
     return "503000";
 }
 
-# FIXME: Need a mapping for where subanalysis will come from in Koha, this is just a placehold stub
 sub _get_acquisitions_subanalysis {
-    my ( $self, $fund ) = @_;
-    my $map = {
-        KAFI   => "5460",    # Fiction
-        KANF   => "5461",    # Non-Fiction
-        KARC   => "5462",    # Archive
-        KBAS   => "5463",    # Basic
-        KCFI   => "5464",    # Children Fiction
-        KCHG   => "5465",    # Children General
-        KCNF   => "5466",    # Children Non-Fiction
-        KCOM   => "5467",    # Computing
-        KEBE   => "5468",    # E-Books
-        KELE   => "5469",    # Electronic
-        KERE   => "5470",    # Reference
-        KFSO   => "5471",    # Fiction Standing Order
-        KHLS   => "5472",    # Health
-        KLPR   => "5473",    # Large Print
-        KNHC   => "5474",    # National Heritage Collection
-        KNSO   => "5475",    # Non-Fiction Standing Order
-        KPER   => "5476",    # Periodicals
-        KRCHI  => "5477",    # Reference Children
-        KREF   => "5478",    # Reference
-        KREFSO => "5479",    # Reference Standing Order
-        KREP   => "5480",    # Replacement
-        KREQ   => "5481",    # Request
-        KRFI   => "5482",    # Reference Fiction
-        KRNF   => "5483",    # Reference Non-Fiction
-        KSPO   => "5484",    # Sport
-        KSSS   => "5485",    # Stock Selection Service
-        KVAT   => "5486",    # VAT
-        KYAD   => "5487",    # Young Adult
-    };
-    my $return = defined( $map->{$fund} ) ? $map->{$fund} : '5999';
-    return $return;
+    my ( $self, $fund_code ) = @_;
+
+    # Get configured fund mappings
+    my $fund_mappings_data = $self->retrieve_data('fund_subanalysis_mappings') || '{}';
+    my $fund_mappings = eval { decode_json($fund_mappings_data) } || {};
+
+    # Check if we have a specific mapping for this fund
+    if ($fund_mappings->{$fund_code}) {
+        return $fund_mappings->{$fund_code};
+    }
+
+    # Fall back to configured default or hardcoded default
+    return $self->retrieve_data('default_acquisitions_subanalysis') || '5999';
 }
 
 sub _get_acquisitions_distribution {

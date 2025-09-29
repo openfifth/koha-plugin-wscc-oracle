@@ -478,8 +478,8 @@ sub _get_acquisitions_costcenter {
         my $fund = $order_line->fund;
         if ($fund && $fund->budget_branchcode) {
             my $branch_fields = $self->_get_branch_additional_fields($fund->budget_branchcode);
-            if ($branch_fields && $branch_fields->{cost_center}) {
-                return $branch_fields->{cost_center};
+            if ($branch_fields && $branch_fields->{acquisitions_costcenter}) {
+                return $branch_fields->{acquisitions_costcenter};
             }
         }
     }
@@ -682,8 +682,8 @@ sub _generate_income_report {
 
             # Get GL code mappings from branch additional fields
             my $branch_fields = $self->_get_branch_additional_fields($library);
-            my $cost_centre   = $branch_fields->{cost_center}
-              || "RN03";    # Default RN03 for libraries
+            my $cost_centre   = $branch_fields->{income_costcenter}
+              || "RN03";    # Default RN03 for income
             my $objective   = $self->_get_income_objective($library);
             my $subjective  = $self->_get_income_subjective($debit_type);
             my $subanalysis = $self->_get_income_subanalysis($debit_type);
@@ -915,7 +915,7 @@ sub _get_branch_additional_fields {
     my $additional_fields = Koha::AdditionalFields->search(
         {
             tablename => 'branches',
-            name      => [ 'objective', 'cost_center' ]
+            name      => [ 'objective', 'income_costcenter', 'acquisitions_costcenter' ]
         }
     );
 
@@ -936,8 +936,9 @@ sub _get_branch_additional_fields {
     }
 
     # Set defaults if not found in database
-    $fields->{objective}   //= 'CUL074';    # Default to Central Admin
-    $fields->{cost_center} //= 'RN03';      # Default cost center for libraries
+    $fields->{objective}              //= 'CUL074';    # Default to Central Admin
+    $fields->{income_costcenter}      //= 'RN03';      # Default cost center for income
+    $fields->{acquisitions_costcenter} //= 'RN05';      # Default cost center for acquisitions
 
     # Cache the result
     $self->{branch_fields_cache}->{$branch_code} = $fields;

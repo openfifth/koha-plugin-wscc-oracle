@@ -66,6 +66,16 @@
                         </ol>
                     </fieldset>
                     <fieldset class="rows">
+                        <legend>Acquisitions</legend>
+                        <ol>
+                            <li>
+                                <label for="default_acquisitions_costcenter">Default cost center for acquisitions:</label>
+                                <input type="text" name="default_acquisitions_costcenter" value="[% default_acquisitions_costcenter || 'RN05' %]" maxlength="10" />
+                                <span class="hint">Used when no cost center is found via branch additional fields</span>
+                            </li>
+                        </ol>
+                    </fieldset>
+                    <fieldset class="rows">
 						<legend>Transport</legend>
                         [% IF available_transports.count %]
 						<ol>

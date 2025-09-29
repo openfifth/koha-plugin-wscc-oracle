@@ -65,10 +65,11 @@ sub configure {
               split( ',', $self->retrieve_data('transport_days') )
         };
         $template->param(
-            transport_server     => $self->retrieve_data('transport_server'),
-            transport_days       => $transport_days,
-            output               => $self->retrieve_data('output'),
-            available_transports => $available_transports
+            transport_server               => $self->retrieve_data('transport_server'),
+            transport_days                 => $transport_days,
+            output                         => $self->retrieve_data('output'),
+            available_transports           => $available_transports,
+            default_acquisitions_costcenter => $self->retrieve_data('default_acquisitions_costcenter')
         );
 
         $self->output_html( $template->output() );
@@ -79,9 +80,10 @@ sub configure {
         my $days_str      = join( ',', sort { $a <=> $b } @selected_days );
         $self->store_data(
             {
-                transport_server => scalar $cgi->param('transport_server'),
-                transport_days   => $days_str,
-                output           => scalar $cgi->param('output')
+                transport_server                => scalar $cgi->param('transport_server'),
+                transport_days                  => $days_str,
+                output                          => scalar $cgi->param('output'),
+                default_acquisitions_costcenter => scalar $cgi->param('default_acquisitions_costcenter')
             }
         );
         $self->go_home();
@@ -409,7 +411,7 @@ sub _generate_invoices_report {
                         $tax_value_on_receiving,    # TAX_AMOUNT
                         $tax_code,                  # TAX_CODE
                         $description,               # DESCRIPTION
-                        $self->_get_acquisitions_costcenter()
+                        $self->_get_acquisitions_costcenter($line)
                         ,                           # COST_CENTRE_PROPERTY_KEY
                         $self->_get_acquisitions_objective(),     # OBJECTIVE
                         $self->_get_acquisitions_subjective(),    # SUBJECTIVE
@@ -469,10 +471,21 @@ sub _generate_invoices_report {
 }
 
 sub _get_acquisitions_costcenter {
-    my ($self) = @_;
+    my ( $self, $order_line ) = @_;
 
-    # Cost Center = RN05 for all acquisitions
-    return "RN05";
+    # If we have an order line, try to get cost center from branch additional fields
+    if ($order_line) {
+        my $fund = $order_line->fund;
+        if ($fund && $fund->budget_branchcode) {
+            my $branch_fields = $self->_get_branch_additional_fields($fund->budget_branchcode);
+            if ($branch_fields && $branch_fields->{cost_center}) {
+                return $branch_fields->{cost_center};
+            }
+        }
+    }
+
+    # Fall back to configured default or hardcoded default
+    return $self->retrieve_data('default_acquisitions_costcenter') || "RN05";
 }
 
 sub _get_acquisitions_objective {
@@ -527,9 +540,9 @@ sub _get_acquisitions_subanalysis {
 }
 
 sub _get_acquisitions_distribution {
-    my ( $self, $fund ) = @_;
+    my ( $self, $fund, $order_line ) = @_;
     my $company     = "1000";    # Default company code
-    my $costcenter  = $self->_get_acquisitions_costcenter();
+    my $costcenter  = $self->_get_acquisitions_costcenter($order_line);
     my $objective   = $self->_get_acquisitions_objective();
     my $subjective  = $self->_get_acquisitions_subjective();
     my $subanalysis = $self->_get_acquisitions_subanalysis($fund);

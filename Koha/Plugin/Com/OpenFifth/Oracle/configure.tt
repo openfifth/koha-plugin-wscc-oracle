@@ -171,26 +171,59 @@
 
                             <h6>For Account Debit Types (<code>account_debit_types</code> table)</h6>
                             <ul>
-                                <li><strong>vat_code</strong>: VAT classification codes</li>
-                                <li><strong>income_code</strong>: Subanalysis code for income transactions (default: 5435)</li>
-                                <li><strong>extra_code</strong>: Additional codes as needed for future requirements</li>
+                                <li><strong>VAT Code</strong>: VAT classification codes (S, Z, E, O)</li>
+                                <li><strong>Subanalysis</strong>: Subanalysis code for income transactions</li>
+                                <li><strong>Subjective</strong>: Subjective code for income transactions</li>
+                                <li><strong>Extra Code</strong>: Additional codes as needed for future requirements</li>
                             </ul>
 
                             <h6>For Library Branches (<code>branches</code> table)</h6>
                             <ul>
-                                <li><strong>objective</strong>: Library-specific objective codes (e.g., CUL001, CUL002, default: CUL074)</li>
-                                <li><strong>income_costcenter</strong>: Cost center codes for income transactions (default: RN03)</li>
-                            </ul>
-
-                            <h5>Income Report Field Resolution</h5>
-                            <ul>
-                                <li><strong>Cost Centre</strong>: From branch additional field <code>income_costcenter</code> (default: RN03)</li>
-                                <li><strong>Objective</strong>: From branch additional field <code>objective</code> (default: CUL074)</li>
-                                <li><strong>Subjective</strong>: Hardcoded mapping based on debit type (841800 for fines, 841850 for book sales)</li>
-                                <li><strong>Subanalysis</strong>: From debit type additional field <code>income_code</code> (default: 5435)</li>
-                                <li><strong>VAT Code/Amount</strong>: From debit type additional field <code>vat_code</code> with rate calculation</li>
+                                <li><strong>Objective</strong>: Library-specific objective codes (e.g., CUL001, CUL002)</li>
+                                <li><strong>Income Cost Centre</strong>: Cost center codes for income transactions</li>
+                                <li><strong>Acquisitions Cost Centre</strong>: Cost center codes for acquisitions transactions</li>
                             </ul>
                         </div>
+
+                        <h4>Default Values for Income Fields</h4>
+                        <div class="hint">These defaults are used when additional field values are not set.</div>
+                        <ol>
+                            <li>
+                                <label for="default_income_costcentre">Default cost centre for income:</label>
+                                <input type="text" name="default_income_costcentre" value="[% default_income_costcentre || 'RN03' %]" maxlength="10" />
+                                <span class="hint">Used when branch additional field 'Income Cost Centre' is empty</span>
+                            </li>
+                            <li>
+                                <label for="default_branch_objective">Default objective for branches:</label>
+                                <input type="text" name="default_branch_objective" value="[% default_branch_objective || 'CUL074' %]" maxlength="10" />
+                                <span class="hint">Used when branch additional field 'Objective' is empty</span>
+                            </li>
+                            <li>
+                                <label for="default_branch_acquisitions_costcentre">Default acquisitions cost centre for branches:</label>
+                                <input type="text" name="default_branch_acquisitions_costcentre" value="[% default_branch_acquisitions_costcentre || 'RN05' %]" maxlength="10" />
+                                <span class="hint">Used when branch additional field 'Acquisitions Cost Centre' is empty</span>
+                            </li>
+                            <li>
+                                <label for="default_vat_code">Default VAT code:</label>
+                                <select name="default_vat_code">
+                                    <option value="O" [% IF default_vat_code == 'O' || !default_vat_code %]selected[% END %]>O - Out of Scope</option>
+                                    <option value="S" [% IF default_vat_code == 'S' %]selected[% END %]>S - Standard</option>
+                                    <option value="Z" [% IF default_vat_code == 'Z' %]selected[% END %]>Z - Zero</option>
+                                    <option value="E" [% IF default_vat_code == 'E' %]selected[% END %]>E - Exempt</option>
+                                </select>
+                                <span class="hint">Used when debit type additional field 'VAT Code' is empty</span>
+                            </li>
+                            <li>
+                                <label for="default_subjective">Default subjective code:</label>
+                                <input type="text" name="default_subjective" value="[% default_subjective || '841800' %]" maxlength="10" />
+                                <span class="hint">Used when debit type additional field 'Subjective' is empty</span>
+                            </li>
+                            <li>
+                                <label for="default_subanalysis">Default subanalysis code:</label>
+                                <input type="text" name="default_subanalysis" value="[% default_subanalysis || '8089' %]" maxlength="10" />
+                                <span class="hint">Used when debit type additional field 'Subanalysis' is empty</span>
+                            </li>
+                        </ol>
                     </fieldset>
                     <fieldset class="action">
                         <input type="hidden" name="save" value="1" />

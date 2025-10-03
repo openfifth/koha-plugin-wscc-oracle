@@ -51,7 +51,7 @@ Which are 'Library' level, which are 'Debit type' level and are any 'Register' o
 - Koha should use location (branch) of the income to derive the Cost Centre and Objective
 - For Objectives there is a mapping
 
-  - We will add these as an 'Objective' additional field for the branches table
+  - These are stored as an `Objective` additional field for the branches table
   - The mappings table follows:
 
   | Objective | Library                |
@@ -95,9 +95,12 @@ Which are 'Library' level, which are 'Debit type' level and are any 'Register' o
   | CUL037    | GORING LIBRARY         |
   | CUL074    | CENTRAL ADMIN          |
 
-- For all locations (branches) the "Cost centre" is 'RN03'
-  - We will add this as a 'Cost center' additional field for the branches table
-- The subjective, subanalysis and VAT code are derived from the debit type.
+- For all locations (branches) the default "Cost centre" is 'RN03'
+  - This is stored as an `Income Cost Centre` additional field for the branches table
+  - Configurable through plugin configuration or per-branch via additional fields
+- The subjective, subanalysis and VAT code are derived from the debit type
+  - Stored as `Subjective`, `Subanalysis`, and `VAT Code` additional fields for the account_debit_types table
+  - Configurable through plugin configuration with sensible defaults
 - Expected VAT Codes are STANDARD, ZERO, OUT OF SCOPE
 - Payment types will be defined as:
   | CODE | Description |

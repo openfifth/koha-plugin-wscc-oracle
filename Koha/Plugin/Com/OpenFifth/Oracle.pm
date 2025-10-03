@@ -61,7 +61,7 @@ sub configure {
         my @days_of_week =
           qw(sunday monday tuesday wednesday thursday friday saturday);
         my $transport_days_data = $self->retrieve_data('transport_days') || '';
-        my $transport_days = {
+        my $transport_days      = {
             map  { $days_of_week[$_] => 1 }
             grep { defined $days_of_week[$_] }
               split( ',', $transport_days_data )
@@ -76,17 +76,20 @@ sub configure {
         );
 
         # Get existing fund mappings
-        my $fund_mappings_data = $self->retrieve_data('fund_subanalysis_mappings') || '{}';
+        my $fund_mappings_data =
+          $self->retrieve_data('fund_subanalysis_mappings') || '{}';
         my $fund_mappings = eval { decode_json($fund_mappings_data) } || {};
         $template->param(
-            transport_server                  => $self->retrieve_data('transport_server'),
-            transport_days                    => $transport_days,
-            output                            => $self->retrieve_data('output'),
-            available_transports              => $available_transports,
-            default_acquisitions_costcenter   => $self->retrieve_data('default_acquisitions_costcenter'),
-            default_acquisitions_subanalysis  => $self->retrieve_data('default_acquisitions_subanalysis'),
-            funds                             => $funds,
-            fund_mappings                     => $fund_mappings
+            transport_server     => $self->retrieve_data('transport_server'),
+            transport_days       => $transport_days,
+            output               => $self->retrieve_data('output'),
+            available_transports => $available_transports,
+            default_acquisitions_costcenter =>
+              $self->retrieve_data('default_acquisitions_costcenter'),
+            default_acquisitions_subanalysis =>
+              $self->retrieve_data('default_acquisitions_subanalysis'),
+            funds         => $funds,
+            fund_mappings => $fund_mappings
         );
 
         $self->output_html( $template->output() );
@@ -100,10 +103,10 @@ sub configure {
         my %fund_mappings;
         my @param_names = $cgi->param();
         for my $param_name (@param_names) {
-            if ($param_name =~ /^fund_(.+)$/) {
-                my $fund_code = $1;
+            if ( $param_name =~ /^fund_(.+)$/ ) {
+                my $fund_code        = $1;
                 my $subanalysis_code = $cgi->param($param_name);
-                if ($subanalysis_code && $subanalysis_code =~ /\S/) {
+                if ( $subanalysis_code && $subanalysis_code =~ /\S/ ) {
                     $fund_mappings{$fund_code} = $subanalysis_code;
                 }
             }
@@ -111,12 +114,14 @@ sub configure {
 
         $self->store_data(
             {
-                transport_server                  => scalar $cgi->param('transport_server'),
-                transport_days                    => $days_str,
-                output                            => scalar $cgi->param('output'),
-                default_acquisitions_costcenter   => scalar $cgi->param('default_acquisitions_costcenter'),
-                default_acquisitions_subanalysis  => scalar $cgi->param('default_acquisitions_subanalysis'),
-                fund_subanalysis_mappings         => encode_json(\%fund_mappings)
+                transport_server => scalar $cgi->param('transport_server'),
+                transport_days   => $days_str,
+                output           => scalar $cgi->param('output'),
+                default_acquisitions_costcenter =>
+                  scalar $cgi->param('default_acquisitions_costcenter'),
+                default_acquisitions_subanalysis =>
+                  scalar $cgi->param('default_acquisitions_subanalysis'),
+                fund_subanalysis_mappings => encode_json( \%fund_mappings )
             }
         );
         $self->go_home();
@@ -431,7 +436,8 @@ sub _generate_invoices_report {
                     $description = $biblio->title || $description;
                 }
 
-# Line record: INVOICE_NUMBER, then empty fields for header data, then line-specific data
+                # Line record: INVOICE_NUMBER, then empty fields for header
+                # data, then line-specific data
                 for my $qty_unit ( 1 .. $quantity ) {
                     push @orderlines, [
                         $invoice->invoicenumber,    # INVOICE_NUMBER
@@ -455,7 +461,8 @@ sub _generate_invoices_report {
                 }
             }
 
-# Get supplier number for first order (assuming all orders in invoice have same supplier)
+            # Get supplier number for first order
+            # (assuming all orders in invoice have same supplier)
             my $first_order     = $invoice->_result->aqorders->first;
             my $supplier_number = "";
             if ($first_order) {
@@ -466,8 +473,10 @@ sub _generate_invoices_report {
             # Make invoice total negative for AP
             $invoice_total *= -1;
 
-# Build header record with new format (15 fields)
-# Header record: INVOICE_NUMBER, INVOICE_TOTAL, INVOICE_DATE, SUPPLIER_NUMBER_PROPERTY_KEY, CONTRACT_NUMBER, SHIPMENT_DATE, then empty fields
+            # Build header record with new format (15 fields)
+            # Header record: INVOICE_NUMBER, INVOICE_TOTAL,
+            # INVOICE_DATE, SUPPLIER_NUMBER_PROPERTY_KEY,
+            # CONTRACT_NUMBER, SHIPMENT_DATE, then empty fields
             $csv->print(
                 $fh,
                 [
@@ -506,12 +515,14 @@ sub _generate_invoices_report {
 sub _get_acquisitions_costcenter {
     my ( $self, $order_line ) = @_;
 
-    # If we have an order line, try to get cost center from branch additional fields
+    # If we have an order line, try to get cost center
+    # from branch additional fields
     if ($order_line) {
         my $fund = $order_line->fund;
-        if ($fund && $fund->budget_branchcode) {
-            my $branch_fields = $self->_get_branch_additional_fields($fund->budget_branchcode);
-            if ($branch_fields && $branch_fields->{acquisitions_costcenter}) {
+        if ( $fund && $fund->budget_branchcode ) {
+            my $branch_fields =
+              $self->_get_branch_additional_fields( $fund->budget_branchcode );
+            if ( $branch_fields && $branch_fields->{acquisitions_costcenter} ) {
                 return $branch_fields->{acquisitions_costcenter};
             }
         }
@@ -539,11 +550,12 @@ sub _get_acquisitions_subanalysis {
     my ( $self, $fund_code ) = @_;
 
     # Get configured fund mappings
-    my $fund_mappings_data = $self->retrieve_data('fund_subanalysis_mappings') || '{}';
+    my $fund_mappings_data =
+      $self->retrieve_data('fund_subanalysis_mappings') || '{}';
     my $fund_mappings = eval { decode_json($fund_mappings_data) } || {};
 
     # Check if we have a specific mapping for this fund
-    if ($fund_mappings->{$fund_code}) {
+    if ( $fund_mappings->{$fund_code} ) {
         return $fund_mappings->{$fund_code};
     }
 
@@ -927,7 +939,8 @@ sub _get_branch_additional_fields {
     my $additional_fields = Koha::AdditionalFields->search(
         {
             tablename => 'branches',
-            name      => [ 'objective', 'income_costcenter', 'acquisitions_costcenter' ]
+            name      =>
+              [ 'objective', 'income_costcenter', 'acquisitions_costcenter' ]
         }
     );
 
@@ -948,9 +961,10 @@ sub _get_branch_additional_fields {
     }
 
     # Set defaults if not found in database
-    $fields->{objective}              //= 'CUL074';    # Default to Central Admin
-    $fields->{income_costcenter}      //= 'RN03';      # Default cost center for income
-    $fields->{acquisitions_costcenter} //= 'RN05';      # Default cost center for acquisitions
+    $fields->{objective}         //= 'CUL074';  # Default to Central Admin
+    $fields->{income_costcenter} //= 'RN03';    # Default cost center for income
+    $fields->{acquisitions_costcenter} //=
+      'RN05';    # Default cost center for acquisitions
 
     # Cache the result
     $self->{branch_fields_cache}->{$branch_code} = $fields;

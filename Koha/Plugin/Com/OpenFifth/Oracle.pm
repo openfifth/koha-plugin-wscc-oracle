@@ -723,10 +723,9 @@ sub _generate_income_report {
 
             # Get offset fields
             my $cost_centre_offset = $self->_get_income_costcenter($debit_type);
-            my $objective_offset   = $self->_get_objective_offset($debit_type);
-            my $subjective_offset  = $self->_get_subjective_offset($debit_type);
-            my $subanalysis_offset =
-              $self->_get_subanalysis_offset($debit_type);
+            my $objective_offset   = $objective;    # Offset matches objective
+            my $subjective_offset  = '810400';      # Fixed value for all income
+            my $subanalysis_offset = '8201';        # Fixed value for all income
 
             # Get VAT information using new codes
             my $vat_code = $self->_get_debit_type_vat_code($debit_type);
@@ -1001,57 +1000,6 @@ sub _get_income_costcenter {
     };
 
     return $map->{$debit_type} || 'DM87';
-}
-
-sub _get_objective_offset {
-    my ( $self, $debit_type ) = @_;
-
-    # Map item types to objective offset codes
-    # Using sample data from requirements
-    my $map = {
-        'Fines'        => 'SRT003',
-        'Book Sale'    => 'SRT003',
-        'Credit'       => 'SRT003',
-        'Refund'       => 'SRT003',
-        'Cancellation' => 'SRT003',
-        'Overpayment'  => 'SRT003',
-    };
-
-    return $map->{$debit_type} || 'SRT003';
-}
-
-sub _get_subjective_offset {
-    my ( $self, $debit_type ) = @_;
-
-    # Map item types to subjective offset codes
-    # Using sample data from requirements
-    my $map = {
-        'Fines'        => '276001',
-        'Book Sale'    => '276001',
-        'Credit'       => '276001',
-        'Refund'       => '276001',
-        'Cancellation' => '276001',
-        'Overpayment'  => '276001',
-    };
-
-    return $map->{$debit_type} || '276001';
-}
-
-sub _get_subanalysis_offset {
-    my ( $self, $debit_type ) = @_;
-
-    # Map item types to subanalysis offset codes
-    # Using sample data from requirements
-    my $map = {
-        'Fines'        => '5435',
-        'Book Sale'    => '5435',
-        'Credit'       => '5435',
-        'Refund'       => '5435',
-        'Cancellation' => '5435',
-        'Overpayment'  => '5435',
-    };
-
-    return $map->{$debit_type} || '5435';
 }
 
 # Get additional field values for a debit type with caching

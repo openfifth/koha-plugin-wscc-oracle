@@ -88,6 +88,18 @@ sub configure {
               $self->retrieve_data('default_acquisitions_costcenter'),
             default_acquisitions_subanalysis =>
               $self->retrieve_data('default_acquisitions_subanalysis'),
+            default_income_costcentre =>
+              $self->retrieve_data('default_income_costcentre'),
+            default_branch_objective =>
+              $self->retrieve_data('default_branch_objective'),
+            default_branch_acquisitions_costcentre =>
+              $self->retrieve_data('default_branch_acquisitions_costcentre'),
+            default_vat_code =>
+              $self->retrieve_data('default_vat_code'),
+            default_subjective =>
+              $self->retrieve_data('default_subjective'),
+            default_subanalysis =>
+              $self->retrieve_data('default_subanalysis'),
             funds         => $funds,
             fund_mappings => $fund_mappings
         );
@@ -121,6 +133,18 @@ sub configure {
                   scalar $cgi->param('default_acquisitions_costcenter'),
                 default_acquisitions_subanalysis =>
                   scalar $cgi->param('default_acquisitions_subanalysis'),
+                default_income_costcentre =>
+                  scalar $cgi->param('default_income_costcentre'),
+                default_branch_objective =>
+                  scalar $cgi->param('default_branch_objective'),
+                default_branch_acquisitions_costcentre =>
+                  scalar $cgi->param('default_branch_acquisitions_costcentre'),
+                default_vat_code =>
+                  scalar $cgi->param('default_vat_code'),
+                default_subjective =>
+                  scalar $cgi->param('default_subjective'),
+                default_subanalysis =>
+                  scalar $cgi->param('default_subanalysis'),
                 fund_subanalysis_mappings => encode_json( \%fund_mappings )
             }
         );
@@ -522,8 +546,8 @@ sub _get_acquisitions_costcenter {
         if ( $fund && $fund->budget_branchcode ) {
             my $branch_fields =
               $self->_get_branch_additional_fields( $fund->budget_branchcode );
-            if ( $branch_fields && $branch_fields->{acquisitions_costcenter} ) {
-                return $branch_fields->{acquisitions_costcenter};
+            if ( $branch_fields && $branch_fields->{'Acquisitions Cost Centre'} ) {
+                return $branch_fields->{'Acquisitions Cost Centre'};
             }
         }
     }
@@ -706,8 +730,7 @@ sub _generate_income_report {
 
             # Get GL code mappings from branch additional fields
             my $branch_fields = $self->_get_branch_additional_fields($library);
-            my $cost_centre   = $branch_fields->{income_costcenter}
-              || "RN03";    # Default RN03 for income
+            my $cost_centre   = $branch_fields->{'Income Cost Centre'};    # Default handled by _get_branch_additional_fields
             my $objective   = $self->_get_income_objective($library);
             my $subjective  = $self->_get_income_subjective($debit_type);
             my $subanalysis = $self->_get_income_subanalysis($debit_type);
@@ -940,7 +963,7 @@ sub _get_branch_additional_fields {
         {
             tablename => 'branches',
             name      =>
-              [ 'objective', 'income_costcenter', 'acquisitions_costcenter' ]
+              [ 'Objective', 'Income Cost Centre', 'Acquisitions Cost Centre' ]
         }
     );
 
@@ -960,11 +983,13 @@ sub _get_branch_additional_fields {
         }
     }
 
-    # Set defaults if not found in database
-    $fields->{objective}         //= 'CUL074';  # Default to Central Admin
-    $fields->{income_costcenter} //= 'RN03';    # Default cost center for income
-    $fields->{acquisitions_costcenter} //=
-      'RN05';    # Default cost center for acquisitions
+    # Set defaults if not found in database (from configuration or hardcoded fallback)
+    $fields->{'Objective'}   //=
+      $self->retrieve_data('default_branch_objective') || 'CUL074';
+    $fields->{'Income Cost Centre'} //=
+      $self->retrieve_data('default_income_costcentre') || 'RN03';
+    $fields->{'Acquisitions Cost Centre'} //=
+      $self->retrieve_data('default_branch_acquisitions_costcentre') || 'RN05';
 
     # Cache the result
     $self->{branch_fields_cache}->{$branch_code} = $fields;
@@ -975,33 +1000,25 @@ sub _get_branch_additional_fields {
 sub _get_income_objective {
     my ( $self, $library_code ) = @_;
 
-    # Get objective from branch additional fields
+    # Get objective from branch additional fields (defaults handled there)
     my $fields = $self->_get_branch_additional_fields($library_code);
-    return $fields->{objective} || 'CUL074';    # Default to Central Admin
+    return $fields->{'Objective'};
 }
 
 sub _get_income_subjective {
     my ( $self, $debit_type ) = @_;
 
-    # Map item types to subjective codes based on requirements
-    my $map = {
-        'Fines'        => '841800',
-        'Book Sale'    => '841850',
-        'Credit'       => '841800',
-        'Refund'       => '841800',
-        'Cancellation' => '841800',
-        'Overpayment'  => '841800',
-    };
-
-    return $map->{$debit_type} || '841800';
+    # Get subjective code from additional fields (defaults handled there)
+    my $fields = $self->_get_debit_type_additional_fields($debit_type);
+    return $fields->{'Subjective'};
 }
 
 sub _get_income_subanalysis {
     my ( $self, $debit_type ) = @_;
 
-    # Get income code (subanalysis) from additional fields
+    # Get subanalysis from additional fields (defaults handled there)
     my $fields = $self->_get_debit_type_additional_fields($debit_type);
-    return $fields->{income_code} || '5435';
+    return $fields->{'Subanalysis'};
 }
 
 sub _get_income_costcenter {
@@ -1087,7 +1104,7 @@ sub _get_debit_type_additional_fields {
     my $additional_fields = Koha::AdditionalFields->search(
         {
             tablename => 'account_debit_types',
-            name      => [ 'vat_code', 'income_code', 'extra_code' ]
+            name      => [ 'VAT Code', 'Extra Code', 'Subjective', 'Subanalysis' ]
         }
     );
 
@@ -1107,10 +1124,14 @@ sub _get_debit_type_additional_fields {
         }
     }
 
-    # Set defaults if not found in database
-    $fields->{vat_code}    //= 'O';       # Default to OUT OF SCOPE
-    $fields->{income_code} //= '5435';    # Default income code
-    $fields->{extra_code}  //= '';        # Default to empty
+    # Set defaults if not found in database (from configuration or hardcoded fallback)
+    $fields->{'VAT Code'} //=
+      $self->retrieve_data('default_vat_code') || 'O';
+    $fields->{'Extra Code'}  //= '';        # Always default to empty
+    $fields->{'Subjective'}  //=
+      $self->retrieve_data('default_subjective') || '841800';
+    $fields->{'Subanalysis'} //=
+      $self->retrieve_data('default_subanalysis') || '8089';
 
     # Cache the result
     $self->{debit_type_fields_cache}->{$debit_type_code} = $fields;
@@ -1123,7 +1144,7 @@ sub _get_debit_type_vat_code {
 
     # Get VAT code from additional fields
     my $fields   = $self->_get_debit_type_additional_fields($debit_type);
-    my $vat_code = $fields->{vat_code} || 'O';
+    my $vat_code = $fields->{'VAT Code'} || 'O';
 
     # Map database VAT codes to Oracle format
     my $vat_map = {

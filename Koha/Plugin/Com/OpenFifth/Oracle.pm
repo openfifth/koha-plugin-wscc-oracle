@@ -94,14 +94,11 @@ sub configure {
               $self->retrieve_data('default_branch_objective'),
             default_branch_acquisitions_costcentre =>
               $self->retrieve_data('default_branch_acquisitions_costcentre'),
-            default_vat_code =>
-              $self->retrieve_data('default_vat_code'),
-            default_subjective =>
-              $self->retrieve_data('default_subjective'),
-            default_subanalysis =>
-              $self->retrieve_data('default_subanalysis'),
-            funds         => $funds,
-            fund_mappings => $fund_mappings
+            default_vat_code    => $self->retrieve_data('default_vat_code'),
+            default_subjective  => $self->retrieve_data('default_subjective'),
+            default_subanalysis => $self->retrieve_data('default_subanalysis'),
+            funds               => $funds,
+            fund_mappings       => $fund_mappings
         );
 
         $self->output_html( $template->output() );
@@ -139,10 +136,8 @@ sub configure {
                   scalar $cgi->param('default_branch_objective'),
                 default_branch_acquisitions_costcentre =>
                   scalar $cgi->param('default_branch_acquisitions_costcentre'),
-                default_vat_code =>
-                  scalar $cgi->param('default_vat_code'),
-                default_subjective =>
-                  scalar $cgi->param('default_subjective'),
+                default_vat_code    => scalar $cgi->param('default_vat_code'),
+                default_subjective  => scalar $cgi->param('default_subjective'),
                 default_subanalysis =>
                   scalar $cgi->param('default_subanalysis'),
                 fund_subanalysis_mappings => encode_json( \%fund_mappings )
@@ -475,12 +470,12 @@ sub _generate_invoices_report {
                         $tax_code,                  # TAX_CODE
                         $description,               # DESCRIPTION
                         $self->_get_acquisitions_costcenter($line)
-                        ,                           # COST_CENTRE_PROPERTY_KEY
-                        $self->_get_acquisitions_objective(),     # OBJECTIVE
-                        $self->_get_acquisitions_subjective(),    # SUBJECTIVE
+                        ,            # COST_CENTRE_PROPERTY_KEY
+                        "ZZZ999",    # OBJECTIVE (default for all funds)
+                        "503000",    # SUBJECTIVE (default for all funds)
                         $self->_get_acquisitions_subanalysis($budget_code)
-                        ,                                         # SUBANALYSIS
-                        $line_count++                             # LIN_NUM
+                        ,                # SUBANALYSIS
+                        $line_count++    # LIN_NUM
                     ];
                 }
             }
@@ -546,7 +541,9 @@ sub _get_acquisitions_costcenter {
         if ( $fund && $fund->budget_branchcode ) {
             my $branch_fields =
               $self->_get_branch_additional_fields( $fund->budget_branchcode );
-            if ( $branch_fields && $branch_fields->{'Acquisitions Cost Centre'} ) {
+            if (   $branch_fields
+                && $branch_fields->{'Acquisitions Cost Centre'} )
+            {
                 return $branch_fields->{'Acquisitions Cost Centre'};
             }
         }
@@ -554,20 +551,6 @@ sub _get_acquisitions_costcenter {
 
     # Fall back to configured default or hardcoded default
     return $self->retrieve_data('default_acquisitions_costcenter') || "RN05";
-}
-
-sub _get_acquisitions_objective {
-    my ($self) = @_;
-
-    # Default objective for all funds
-    return "ZZZ999";
-}
-
-sub _get_acquisitions_subjective {
-    my ($self) = @_;
-
-    # Default subjective for all funds
-    return "503000";
 }
 
 sub _get_acquisitions_subanalysis {
@@ -589,10 +572,10 @@ sub _get_acquisitions_subanalysis {
 
 sub _get_acquisitions_distribution {
     my ( $self, $fund, $order_line ) = @_;
-    my $company     = "1000";    # Default company code
+    my $company     = "1000";      # Default company code
     my $costcenter  = $self->_get_acquisitions_costcenter($order_line);
-    my $objective   = $self->_get_acquisitions_objective();
-    my $subjective  = $self->_get_acquisitions_subjective();
+    my $objective   = "ZZZ999";    # Default objective for all funds
+    my $subjective  = "503000";    # Default subjective for all funds
     my $subanalysis = $self->_get_acquisitions_subanalysis($fund);
     my $spare1      = "000000";
     my $spare2      = "000000";
@@ -728,12 +711,15 @@ sub _generate_income_report {
             # Get accounting date in Oracle format
             my $accounting_date = $self->_format_oracle_date($date);
 
-            # Get GL code mappings from branch additional fields
+            # Get GL code mappings from branch and debit type additional fields
             my $branch_fields = $self->_get_branch_additional_fields($library);
-            my $cost_centre   = $branch_fields->{'Income Cost Centre'};    # Default handled by _get_branch_additional_fields
-            my $objective   = $self->_get_income_objective($library);
-            my $subjective  = $self->_get_income_subjective($debit_type);
-            my $subanalysis = $self->_get_income_subanalysis($debit_type);
+            my $debit_fields =
+              $self->_get_debit_type_additional_fields($debit_type);
+
+            my $cost_centre = $branch_fields->{'Income Cost Centre'};
+            my $objective   = $branch_fields->{'Objective'};
+            my $subjective  = $debit_fields->{'Subjective'};
+            my $subanalysis = $debit_fields->{'Subanalysis'};
 
             # Get offset fields
             my $cost_centre_offset = $self->_get_income_costcenter($debit_type);
@@ -983,8 +969,8 @@ sub _get_branch_additional_fields {
         }
     }
 
-    # Set defaults if not found in database (from configuration or hardcoded fallback)
-    $fields->{'Objective'}   //=
+# Set defaults if not found in database (from configuration or hardcoded fallback)
+    $fields->{'Objective'} //=
       $self->retrieve_data('default_branch_objective') || 'CUL074';
     $fields->{'Income Cost Centre'} //=
       $self->retrieve_data('default_income_costcentre') || 'RN03';
@@ -995,30 +981,6 @@ sub _get_branch_additional_fields {
     $self->{branch_fields_cache}->{$branch_code} = $fields;
 
     return $fields;
-}
-
-sub _get_income_objective {
-    my ( $self, $library_code ) = @_;
-
-    # Get objective from branch additional fields (defaults handled there)
-    my $fields = $self->_get_branch_additional_fields($library_code);
-    return $fields->{'Objective'};
-}
-
-sub _get_income_subjective {
-    my ( $self, $debit_type ) = @_;
-
-    # Get subjective code from additional fields (defaults handled there)
-    my $fields = $self->_get_debit_type_additional_fields($debit_type);
-    return $fields->{'Subjective'};
-}
-
-sub _get_income_subanalysis {
-    my ( $self, $debit_type ) = @_;
-
-    # Get subanalysis from additional fields (defaults handled there)
-    my $fields = $self->_get_debit_type_additional_fields($debit_type);
-    return $fields->{'Subanalysis'};
 }
 
 sub _get_income_costcenter {
@@ -1104,7 +1066,7 @@ sub _get_debit_type_additional_fields {
     my $additional_fields = Koha::AdditionalFields->search(
         {
             tablename => 'account_debit_types',
-            name      => [ 'VAT Code', 'Extra Code', 'Subjective', 'Subanalysis' ]
+            name => [ 'VAT Code', 'Extra Code', 'Subjective', 'Subanalysis' ]
         }
     );
 
@@ -1124,11 +1086,10 @@ sub _get_debit_type_additional_fields {
         }
     }
 
-    # Set defaults if not found in database (from configuration or hardcoded fallback)
-    $fields->{'VAT Code'} //=
-      $self->retrieve_data('default_vat_code') || 'O';
-    $fields->{'Extra Code'}  //= '';        # Always default to empty
-    $fields->{'Subjective'}  //=
+# Set defaults if not found in database (from configuration or hardcoded fallback)
+    $fields->{'VAT Code'}   //= $self->retrieve_data('default_vat_code') || 'O';
+    $fields->{'Extra Code'} //= '';    # Always default to empty
+    $fields->{'Subjective'} //=
       $self->retrieve_data('default_subjective') || '841800';
     $fields->{'Subanalysis'} //=
       $self->retrieve_data('default_subanalysis') || '8089';

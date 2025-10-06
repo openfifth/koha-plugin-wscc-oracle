@@ -567,7 +567,7 @@ sub _get_acquisitions_subanalysis {
     }
 
     # Fall back to configured default or hardcoded default
-    return $self->retrieve_data('default_acquisitions_subanalysis') || '5999';
+    return $self->retrieve_data('default_acquisitions_subanalysis') || '5460';
 }
 
 sub _get_acquisitions_distribution {
@@ -722,22 +722,17 @@ sub _generate_income_report {
             my $subanalysis = $debit_fields->{'Subanalysis'};
 
             # Get offset fields
-            my $cost_centre_offset = $self->_get_income_costcenter($debit_type);
+            my $cost_centre_offset = $cost_centre;  # Offset matches cost_centre
             my $objective_offset   = $objective;    # Offset matches objective
             my $subjective_offset  = '810400';      # Fixed value for all income
             my $subanalysis_offset = '8201';        # Fixed value for all income
 
             # Get VAT information using new codes
-            my $vat_code = $self->_get_debit_type_vat_code($debit_type);
-            my $vat_amount =
-              $self->_calculate_vat_amount_new( $amount, $vat_code );
-
-            # Map payment type to standard format
-            my $mapped_payment_type =
-              $self->_map_credit_type_to_payment_type($credit_type);
+            my $vat_code   = $self->_get_debit_type_vat_code($debit_type);
+            my $vat_amount = $self->_calculate_vat_amount( $amount, $vat_code );
 
             # Create line description in format: "[Payment Type] [Item Type]"
-            my $line_description = $mapped_payment_type . " " . $debit_type;
+            my $line_description = $payment_type . " " . $debit_type;
             $line_description =~ s/[|"]//g;   # Remove pipe and quote characters
 
             # Build record according to new 19-field cash management spec
@@ -789,68 +784,6 @@ sub _generate_filename {
     return $filename . $extension;
 }
 
-sub _map_income_type_to_cost_centre {
-    my ( $self, $credit_type, $branch ) = @_;
-
-    # Map library branches to cost centres
-    my $branch_map = {
-        'Angmering'      => "RG02",
-        'Arundel'        => "RG03",
-        'Billingshurst'  => "RE01",
-        'Bognor Regis'   => "RH00",
-        'Broadfield'     => "RA01",
-        'Broadwater'     => "RK01",
-        'Burgess Hill'   => "RD00",
-        'Chichester'     => "RJ00",
-        'Crawley'        => "RA00",
-        'Durrington'     => "RK02",
-        'East Grinstead' => "RB00",
-        'East Preston'   => "RG04",
-        'Ferring'        => "RG05",
-        'Findon Valley'  => "RK03",
-        'Goring'         => "RK04",
-        'Hassocks'       => "RD03",
-        'Haywards Heath' => "RD01",
-        'Henfield'       => "RD02",
-        'Horsham'        => "RC00",
-        'Hurstpierpoint' => "RD04",
-        'Lancing'        => "RF01",
-        'Littlehampton'  => "RG00",
-        'Midhurst'       => "RE02",
-        'Petworth'       => "RE03",
-        'Pulborough'     => "RE04",
-        'Rustington'     => "RG01",
-        'Selsey'         => "RJ01",
-        'Shoreham'       => "RF00",
-        'Southbourne'    => "RJ02",
-        'Southwater'     => "RC01",
-        'Southwick'      => "RF02",
-        'Steyning'       => "RF03",
-        'Storrington'    => "RE00",
-        'Willowhale'     => "RH01",
-        'Witterings'     => "RJ03",
-        'Worthing'       => "RK00"
-    };
-
-    return $branch_map->{$branch} || 'E26315';
-}
-
-sub _map_income_type_to_objective {
-    my ( $self, $credit_type, $branch ) = @_;
-
-    # Map library branches to objectives
-    my $branch_map = {
-        'CPL' => 'CUL001',    # Centerville
-        'FFL' => 'CUL002',    # Fairfield
-        'FPL' => 'CUL003',    # Fairview
-        'FRL' => 'CUL004',    # Franklin
-        'IPT' => 'CUL005',    # Institut Protestant
-                              # Add other branches as needed
-    };
-
-    return $branch_map->{$branch} || 'CUL074';    # Default to Central Admin
-}
-
 sub _format_oracle_date {
     my ( $self, $date ) = @_;
     return "" unless $date;
@@ -898,43 +831,6 @@ sub _map_fund_to_suppliernumber {
     return $return;
 }
 
-# New income report helper functions for updated requirements
-
-sub _get_debit_type_from_debit_type {
-    my ( $self, $credit_type ) = @_;
-
-    # Map credit types to item types based on our loaded debit types
-    # This should eventually use the additional fields from account_debit_types
-    my $map = {
-        'PAYMENT'      => 'Fines',
-        'PURCHASE'     => 'Book Sale',
-        'CREDIT'       => 'Credit',
-        'REFUND'       => 'Refund',
-        'CANCELLATION' => 'Cancellation',
-        'OVERPAYMENT'  => 'Overpayment',
-    };
-
-    return $map->{$credit_type} || 'Unknown';
-}
-
-sub _map_credit_type_to_payment_type {
-    my ( $self, $credit_type ) = @_;
-
-    # Map credit types to payment types (CASH, CARD KIOSK, CARD TERMINAL)
-    # This is a simplified mapping - in reality this would need more logic
-    # to determine actual payment method used
-    my $map = {
-        'PAYMENT'      => 'CASH',
-        'PURCHASE'     => 'CASH',
-        'CREDIT'       => 'CASH',
-        'REFUND'       => 'CASH',
-        'CANCELLATION' => 'CASH',
-        'OVERPAYMENT'  => 'CASH',
-    };
-
-    return $map->{$credit_type} || 'CASH';
-}
-
 # Get branch additional field values with caching
 sub _get_branch_additional_fields {
     my ( $self, $branch_code ) = @_;
@@ -968,11 +864,12 @@ sub _get_branch_additional_fields {
         }
     }
 
-# Set defaults if not found in database (from configuration or hardcoded fallback)
+    # Set defaults if not found in database
+    # (from configuration or hardcoded fallback)
     $fields->{'Objective'} //=
       $self->retrieve_data('default_branch_objective') || 'CUL074';
     $fields->{'Income Cost Centre'} //=
-      $self->retrieve_data('default_income_costcentre') || 'RN03';
+      $self->retrieve_data('default_income_costcentre') || 'RZ00';
     $fields->{'Acquisitions Cost Centre'} //=
       $self->retrieve_data('default_branch_acquisitions_costcentre') || 'RN05';
 
@@ -980,26 +877,6 @@ sub _get_branch_additional_fields {
     $self->{branch_fields_cache}->{$branch_code} = $fields;
 
     return $fields;
-}
-
-sub _get_income_costcenter {
-    my ( $self, $debit_type ) = @_;
-
-    # Default to a branch level, but some may have a debit
-    # level specified which should overrule the branch
-
-    # Map item types to cost centre offset codes
-    # Using sample data from requirements
-    my $map = {
-        'Fines'        => 'DM87',
-        'Book Sale'    => 'DM87',
-        'Credit'       => 'DM87',
-        'Refund'       => 'DM87',
-        'Cancellation' => 'DM87',
-        'Overpayment'  => 'DM87',
-    };
-
-    return $map->{$debit_type} || 'DM87';
 }
 
 # Get additional field values for a debit type with caching
@@ -1034,7 +911,8 @@ sub _get_debit_type_additional_fields {
         }
     }
 
-# Set defaults if not found in database (from configuration or hardcoded fallback)
+    # Set defaults if not found in database
+    # (from configuration or hardcoded fallback)
     $fields->{'VAT Code'}   //= $self->retrieve_data('default_vat_code') || 'O';
     $fields->{'Extra Code'} //= '';    # Always default to empty
     $fields->{'Subjective'} //=
@@ -1048,6 +926,7 @@ sub _get_debit_type_additional_fields {
     return $fields;
 }
 
+# Map debit type VAT Code to Oracle VAT String
 sub _get_debit_type_vat_code {
     my ( $self, $debit_type ) = @_;
 
@@ -1066,14 +945,16 @@ sub _get_debit_type_vat_code {
     return $vat_map->{$vat_code} || 'OUT OF SCOPE';
 }
 
-sub _calculate_vat_amount_new {
+# Given a VAT inclusive amount and a VAT Code
+# Return the VAT amount
+sub _calculate_vat_amount {
     my ( $self, $amount, $vat_code ) = @_;
 
     # Only calculate VAT for STANDARD rate items
     return 0 unless $vat_code eq 'STANDARD';
 
     # Standard VAT rate is 20%
-    my $vat_amount = $amount * 0.20;
+    my $vat_amount = $amount / 1.20;
     return int( $vat_amount * 100 );    # Convert to pence
 }
 

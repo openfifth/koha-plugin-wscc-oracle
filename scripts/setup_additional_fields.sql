@@ -1,7 +1,7 @@
 -- Setup script for additional fields required by WSCC Oracle Finance Plugin
 -- This script creates the necessary additional field definitions for:
 -- 1. account_debit_types table (VAT Code, Extra Code, Subjective, Subanalysis)
--- 2. branches table (Objective, Income Cost Centre, Acquisitions Cost Centre)
+-- 2. branches table (Income Objective, Income Cost Centre, Acquisitions Cost Centre)
 
 -- NOTE: Run this script against your Koha database to enable dynamic configuration
 -- of COA (Chart of Accounts) mappings for Oracle Finance integration.
@@ -42,12 +42,12 @@ ON DUPLICATE KEY UPDATE
 -- Additional Fields for branches
 -- =============================================================================
 
--- Insert additional field for Objective (Library-specific objective codes)
+-- Insert additional field for Income Objective (Library-specific objective codes)
 INSERT INTO additional_fields (tablename, name, authorised_value_category, marcfield, searchable)
-VALUES ('branches', 'Objective', NULL, '', 0)
+VALUES ('branches', 'Income Objective', NULL, '', 0)
 ON DUPLICATE KEY UPDATE
     tablename = 'branches',
-    name = 'Objective';
+    name = 'Income Objective';
 
 -- Insert additional field for Income Cost Center
 INSERT INTO additional_fields (tablename, name, authorised_value_category, marcfield, searchable)

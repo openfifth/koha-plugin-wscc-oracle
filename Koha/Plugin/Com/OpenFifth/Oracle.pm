@@ -717,7 +717,7 @@ sub _generate_income_report {
               $self->_get_debit_type_additional_fields($debit_type);
 
             my $cost_centre = $branch_fields->{'Income Cost Centre'};
-            my $objective   = $branch_fields->{'Objective'};
+            my $objective   = $branch_fields->{'Income Objective'};
             my $subjective  = $debit_fields->{'Subjective'};
             my $subanalysis = $debit_fields->{'Subanalysis'};
 
@@ -844,7 +844,7 @@ sub _get_branch_additional_fields {
         {
             tablename => 'branches',
             name      =>
-              [ 'Objective', 'Income Cost Centre', 'Acquisitions Cost Centre' ]
+              [ 'Income Objective', 'Income Cost Centre', 'Acquisitions Cost Centre' ]
         }
     );
 
@@ -866,7 +866,7 @@ sub _get_branch_additional_fields {
 
     # Set defaults if not found in database
     # (from configuration or hardcoded fallback)
-    $fields->{'Objective'} //=
+    $fields->{'Income Objective'} //=
       $self->retrieve_data('default_branch_objective') || 'CUL074';
     $fields->{'Income Cost Centre'} //=
       $self->retrieve_data('default_income_costcentre') || 'RZ00';

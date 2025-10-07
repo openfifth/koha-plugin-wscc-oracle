@@ -2,14 +2,14 @@
 -- This script sets branch-specific cost centres based on the branch name mappings
 -- It is idempotent - can be run multiple times safely
 -- Branches not in the mapping will have their Income Cost Centre values removed
--- to allow fallback to the plugin's configured default
+-- to allow fallback to the plugin's configured default (RN03)
 
 -- =============================================================================
 -- Populate Income Cost Centre for branches based on branch name mapping
 -- =============================================================================
 
 -- First, delete any existing Income Cost Centre values for branches not in our mapping
--- This allows them to fall back to the plugin's configured default (RZ00)
+-- This allows them to fall back to the plugin's configured default (RN03)
 DELETE afv
 FROM additional_field_values afv
 INNER JOIN additional_fields af ON afv.field_id = af.id
@@ -91,16 +91,16 @@ ON DUPLICATE KEY UPDATE
 -- Set Plugin Default for Income Cost Centre
 -- =============================================================================
 
--- Update the plugin's default_income_costcentre setting to 'RZ00'
+-- Update the plugin's default_income_costcentre setting to 'RN03'
 -- This is used as fallback for branches without explicit Income Cost Centre values
 UPDATE plugin_data
-SET plugin_value = 'RZ00'
+SET plugin_value = 'RN03'
 WHERE plugin_class = 'Koha::Plugin::Com::OpenFifth::Oracle'
   AND plugin_key = 'default_income_costcentre';
 
 -- If the setting doesn't exist, insert it
 INSERT INTO plugin_data (plugin_class, plugin_key, plugin_value)
-SELECT 'Koha::Plugin::Com::OpenFifth::Oracle', 'default_income_costcentre', 'RZ00'
+SELECT 'Koha::Plugin::Com::OpenFifth::Oracle', 'default_income_costcentre', 'RN03'
 WHERE NOT EXISTS (
     SELECT 1 FROM plugin_data
     WHERE plugin_class = 'Koha::Plugin::Com::OpenFifth::Oracle'
@@ -135,7 +135,7 @@ ON DUPLICATE KEY UPDATE
 --     b.branchname,
 --     afv_income.value AS income_cost_centre,
 --     afv_acq.value AS acquisitions_cost_centre,
---     CASE WHEN afv_income.value IS NULL THEN 'RZ00 (plugin default)' ELSE afv_income.value END AS effective_income_cost_centre
+--     CASE WHEN afv_income.value IS NULL THEN 'RN03 (plugin default)' ELSE afv_income.value END AS effective_income_cost_centre
 -- FROM branches b
 -- LEFT JOIN additional_fields af_income ON af_income.tablename = 'branches' AND af_income.name = 'Income Cost Centre'
 -- LEFT JOIN additional_field_values afv_income ON afv_income.field_id = af_income.id AND afv_income.record_id = b.branchcode

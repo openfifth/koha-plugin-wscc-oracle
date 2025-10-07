@@ -4,7 +4,7 @@
 
 Koha plugin that uses Koha::Objects and SQL::Abstract syntax to build reports for output via SFTP to the Oracle finance system via InfoSys.
 
-Utilises the additional fields functionality of Koha to allow dynamic configuration and lookup for VAT and other COA codes and income.
+Utilises the additional fields functionality of Koha where possible to allow dynamic configuration and lookup for VAT and other COA codes and income. Where additional fields support has not yet been added for a particular table, add a mappings table utilising the plugin configuration page and plugin storage.
 
 ## Key Requirements
 
@@ -32,7 +32,7 @@ use Koha::AdditionalFieldValues;
 
 #### `_get_branch_additional_fields($branch_code)`
 
-- Retrieves Title Case field names: `Objective`, `Income Cost Centre`, `Acquisitions Cost Centre`
+- Retrieves Title Case field names: `Income Objective`, `Income Cost Centre`, `Acquisitions Cost Centre`
 - Uses same caching pattern as debit type lookups
 - Returns defaults from plugin configuration or hardcoded fallbacks
 
@@ -49,25 +49,31 @@ use Koha::AdditionalFieldValues;
 
 #### Income Field Mapping
 
-Income report fields are now directly accessed from cached additional fields:
-- Subjective: Retrieved from `$debit_fields->{'Subjective'}`
-- Subanalysis: Retrieved from `$debit_fields->{'Subanalysis'}`
-- Objective: Retrieved from `$branch_fields->{'Objective'}`
-- Cost Centre: Retrieved from `$branch_fields->{'Income Cost Centre'}`
+Income report aggregates by both credit branch (payment location) and debit branch (charge origin).
 
-#### Income Offset Fields (Fixed Values)
+**Main Fields (from Credit Branch - where payment was taken):**
+- Cost Centre: Retrieved from credit branch `$credit_branch_fields->{'Income Cost Centre'}` (default: RN03)
+- Objective: Retrieved from credit branch `$credit_branch_fields->{'Income Objective'}` (default: CUL074)
 
-Income offset fields use fixed values for all transactions:
-- **Objective Offset**: Matches the Objective value
-- **Subjective Offset**: Fixed value '810400'
-- **Subanalysis Offset**: Fixed value '8201'
-- **Cost Centre Offset**: Uses debit type mapping (default: DM87)
+**Transaction Fields (from Debit Type):**
+- Subjective: Retrieved from `$debit_fields->{'Subjective'}` (default: 841800)
+- Subanalysis: Retrieved from `$debit_fields->{'Subanalysis'}` (default: 8089)
 
-### 5. Maintains Backward Compatibility
+#### Income Offset Fields
 
-- All functions provide default values if database lookups fail
-- No breaking changes to existing API
-- Graceful fallback to sensible defaults
+Income offset fields use a combination of configurable and branch-specific values:
+
+- **Cost Centre Offset**: Configurable via plugin setting `default_income_costcentre_offset` (default: 'RZ00' - Libraries Income Suspense)
+- **Objective Offset**: From debit branch `$debit_branch_fields->{'Income Objective'}` (where charge originated)
+- **Subjective Offset**: Configurable via plugin setting `default_income_subjective_offset` (default: '810400')
+- **Subanalysis Offset**: Configurable via plugin setting `default_income_subanalysis_offset` (default: '8201')
+
+### 5. Configuration-Driven Design
+
+- All default values stored in plugin configuration (plugin_data table)
+- No hardcoded fallback values in code
+- Initial defaults set via populate_plugin_defaults.sql setup script
+- All defaults configurable through plugin administration interface
 
 ## Database Schema Requirements
 
@@ -87,7 +93,7 @@ INSERT INTO additional_fields (tablename, name, ...) VALUES
 
 ```sql
 INSERT INTO additional_fields (tablename, name, ...) VALUES
-('branches', 'Objective', ...),
+('branches', 'Income Objective', ...),
 ('branches', 'Income Cost Centre', ...),
 ('branches', 'Acquisitions Cost Centre', ...);
 ```
@@ -95,6 +101,7 @@ INSERT INTO additional_fields (tablename, name, ...) VALUES
 ### Setup Scripts
 
 SQL scripts are provided in the `scripts/` directory:
+
 - `setup_additional_fields.sql`: Creates field definitions
 - `populate_branch_costcenters.sql`: Sets default cost centres
 - `populate_branch_objectives.sql`: Sets default objectives
@@ -102,12 +109,12 @@ SQL scripts are provided in the `scripts/` directory:
 
 ## Benefits
 
-1. **Maintainability**: Minimal hard-coded mappings - most values from database
-2. **Flexibility**: Easy to update COA codes via database or plugin configuration
+1. **Maintainability**: Zero hard-coded mappings - all values from database or plugin configuration
+2. **Flexibility**: Easy to update COA codes via database or plugin configuration interface
 3. **Performance**: Caching prevents repeated database queries during report generation
 4. **Standards Compliance**: Uses proper Koha Objects and SQL::Abstract syntax
 5. **Extensibility**: Easy to add new additional fields as needed
-6. **Configurable Defaults**: All default values configurable through plugin interface
+6. **Fully Configurable**: All default values set via SQL scripts or plugin interface - no code changes needed
 
 ## Testing
 
@@ -147,7 +154,7 @@ Store branch-specific accounting codes using additional fields on the `branches`
 
 - `Income Cost Centre` - Cost Centre code for income transactions (e.g., RN03, RQ30)
 - `Acquisitions Cost Centre` - Cost Centre code for acquisitions transactions (e.g., RN05)
-- `Objective` - Objective code (e.g., CUL074, CUL096)
+- `Income Objective` - Objective code (e.g., CUL001-CUL037, CUL074)
 
 **Benefits:**
 
@@ -170,43 +177,48 @@ Store transaction-type specific codes using additional fields on `account_debit_
 
 The income report CSV requires 16 fields per transaction. Current field mapping:
 
-| CSV Field                 | Source             | Implementation                              |
-| ------------------------- | ------------------ | ------------------------------------------- |
-| D_Cost Centre (8)         | Branch             | `Income Cost Centre` additional field       |
-| D_Objective (9)           | Branch             | `Objective` additional field                |
-| D_Subjective (10)         | Debit Type         | `Subjective` additional field               |
-| D_Subanalysis (11)        | Debit Type         | `Subanalysis` additional field              |
-| D_Cost Centre Offset (13) | Debit Type Mapping | `_get_income_costcenter()` method           |
-| D_Objective Offset (14)   | Branch             | Matches Objective value                     |
-| D_Subjective Offset (15)  | Fixed              | Always '810400'                             |
-| D_Subanalysis Offset (16) | Fixed              | Always '8201'                               |
+| CSV Field                 | Source               | Implementation                                      |
+| ------------------------- | -------------------- | --------------------------------------------------- |
+| D_Cost Centre (6)         | Credit Branch        | `Income Cost Centre` additional field (default: RN03) |
+| D_Objective (7)           | Credit Branch        | `Income Objective` additional field (default: CUL074) |
+| D_Subjective (8)          | Debit Type           | `Subjective` additional field (default: 841800)     |
+| D_Subanalysis (9)         | Debit Type           | `Subanalysis` additional field (default: 8089)      |
+| D_Cost Centre Offset (10) | Plugin Configuration | Configurable (default: 'RZ00' - Libraries Income Suspense) |
+| D_Objective Offset (11)   | Debit Branch         | `Income Objective` from debit branch                |
+| D_Subjective Offset (12)  | Plugin Configuration | Configurable (default: '810400' - Other Income)     |
+| D_Subanalysis Offset (13) | Plugin Configuration | Configurable (default: '8201')                      |
 
-**Note:** Offset fields for income have been simplified based on business requirements - Objective Offset always matches Objective, while Subjective and Subanalysis Offsets use fixed values.
+**Note:** Income report aggregates by both credit branch (payment location) and debit branch (charge origin). Credit branch provides Cost Centre and Objective for main fields, while debit branch provides Objective for the offset field. This ensures proper accounting of where funds were collected vs. where charges originated.
 
 #### 4. Configurable Defaults System
 
-The plugin implements a three-tier default value precedence system:
+The plugin implements a two-tier default value precedence system:
 
 1. **Database** - Values from additional_field_values (highest priority)
-2. **Configuration** - Plugin configuration defaults
-3. **Hardcoded** - Fallback values in code (lowest priority)
+2. **Plugin Configuration** - Default values from plugin_data table (set via plugin configuration or SQL setup scripts)
 
-**Configurable defaults available:**
+**Configurable defaults (set via populate_plugin_defaults.sql or plugin configuration):**
 
-- Default Income Cost Centre (fallback: RN03)
-- Default Branch Objective (fallback: CUL074)
-- Default Acquisitions Cost Centre (fallback: RN05)
-- Default VAT Code (fallback: O - Out of Scope)
-- Default Subjective (fallback: 841800)
-- Default Subanalysis (fallback: 8089)
+- Default Income Cost Centre (default: RN03)
+- Default Branch Objective (default: CUL074)
+- Default Branch Acquisitions Cost Centre (default: RN05)
+- Default Acquisitions Cost Center (default: RN05)
+- Default Acquisitions Subanalysis (default: 5460)
+- Default VAT Code (default: O - Out of Scope)
+- Default Subjective (default: 841800)
+- Default Subanalysis (default: 8089)
+- Default Income Cost Centre Offset (default: RZ00)
+- Default Income Subjective Offset (default: 810400)
+- Default Income Subanalysis Offset (default: 8201)
 
 #### 5. Setup and Installation
 
 **SQL Scripts Provided:**
 
 - `scripts/setup_additional_fields.sql` - Creates field definitions
-- `scripts/populate_branch_costcenters.sql` - Sets default cost centres
-- `scripts/populate_branch_objectives.sql` - Sets default objectives
+- `scripts/populate_branch_costcenters.sql` - Sets branch-specific cost centres and plugin default (RN03)
+- `scripts/populate_branch_objectives.sql` - Sets branch-specific objectives and plugin default (CUL074)
+- `scripts/populate_plugin_defaults.sql` - Sets all WSCC-specific plugin configuration defaults
 - `scripts/migrate_income_code_to_subanalysis.sql` - Migration from legacy field names
 - `scripts/load_debit_types.sql` - Loads debit types with additional field values
 
@@ -229,9 +241,9 @@ The plugin implements a three-tier default value precedence system:
 
 #### 7. Advantages of This Approach
 
-✅ **Minimal hardcoded mappings** - Most values from database or configuration
+✅ **No hardcoded mappings** - All values from database or plugin configuration
 ✅ **Library staff configurable** - No developer intervention needed for changes
-✅ **Three-tier defaults** - Graceful fallback when values not set
+✅ **Two-tier defaults** - Database values override plugin configuration defaults
 ✅ **Oracle validation** - Ensures only valid COA combinations are used
 ✅ **Multi-region support** - Different branches can use different COA structures
 ✅ **Audit trail** - Changes tracked through Koha's interface

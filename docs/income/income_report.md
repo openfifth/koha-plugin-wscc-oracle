@@ -50,8 +50,7 @@ Which are 'Library' level, which are 'Debit type' level and are any 'Register' o
 - Koha should post the sum of transactions per library per debit type per receipt type (configurable as payment type in Koha) per day.
 - Koha should use location (branch) of the income to derive the Cost Centre and Objective
 - For Objectives there is a mapping
-
-  - These are stored as an `Objective` additional field for the branches table
+  - These are stored as an `Income Objective` additional field for the branches table
   - The mappings table follows:
 
   | Objective | Library                |
@@ -103,12 +102,13 @@ Which are 'Library' level, which are 'Debit type' level and are any 'Register' o
   - Configurable through plugin configuration with sensible defaults
 - Expected VAT Codes are STANDARD, ZERO, OUT OF SCOPE
 - Payment types will be defined as:
-  | CODE | Description |
-  | ---- | ------------ |
-  | CASH | includes both physical cash and cheques |
-  | CARD KIOSK | debit or credit card payment to a kiosk |
+
+  | CODE          | Description                                                      |
+  | ------------- | ---------------------------------------------------------------- |
+  | CASH          | includes both physical cash and cheques                          |
+  | CARD KIOSK    | debit or credit card payment to a kiosk                          |
   | CARD TERMINAL | debit or credit card payment to a handheld CHIP and PIN terminal |
-  | PAY360 | payment using online payments system, Pay360 |
+  | PAY360        | payment using online payments system, Pay360                     |
 
 - The descriptions for lines will be:
   - Payment type followed by debit type

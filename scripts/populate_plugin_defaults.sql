@@ -201,6 +201,42 @@ WHERE NOT EXISTS (
 );
 
 -- =============================================================================
+-- Default Supplier Number
+-- =============================================================================
+
+-- Set default_supplier_number to '4539' (most common supplier in WSCC)
+UPDATE plugin_data
+SET plugin_value = '4539'
+WHERE plugin_class = 'Koha::Plugin::Com::OpenFifth::Oracle'
+  AND plugin_key = 'default_supplier_number';
+
+INSERT INTO plugin_data (plugin_class, plugin_key, plugin_value)
+SELECT 'Koha::Plugin::Com::OpenFifth::Oracle', 'default_supplier_number', '4539'
+WHERE NOT EXISTS (
+    SELECT 1 FROM plugin_data
+    WHERE plugin_class = 'Koha::Plugin::Com::OpenFifth::Oracle'
+      AND plugin_key = 'default_supplier_number'
+);
+
+-- =============================================================================
+-- Default Contract Number
+-- =============================================================================
+
+-- Set default_contract_number to 'C50335' (WSCC contract)
+UPDATE plugin_data
+SET plugin_value = 'C50335'
+WHERE plugin_class = 'Koha::Plugin::Com::OpenFifth::Oracle'
+  AND plugin_key = 'default_contract_number';
+
+INSERT INTO plugin_data (plugin_class, plugin_key, plugin_value)
+SELECT 'Koha::Plugin::Com::OpenFifth::Oracle', 'default_contract_number', 'C50335'
+WHERE NOT EXISTS (
+    SELECT 1 FROM plugin_data
+    WHERE plugin_class = 'Koha::Plugin::Com::OpenFifth::Oracle'
+      AND plugin_key = 'default_contract_number'
+);
+
+-- =============================================================================
 -- Verification Query
 -- =============================================================================
 
@@ -219,6 +255,8 @@ WHERE NOT EXISTS (
 --     'default_income_subanalysis_offset',
 --     'default_acquisitions_costcenter',
 --     'default_acquisitions_subanalysis',
---     'default_branch_acquisitions_costcentre'
+--     'default_branch_acquisitions_costcentre',
+--     'default_supplier_number',
+--     'default_contract_number'
 --   )
 -- ORDER BY plugin_key;

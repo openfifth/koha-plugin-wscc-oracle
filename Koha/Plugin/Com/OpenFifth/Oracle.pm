@@ -11,6 +11,7 @@ use Koha::Account::Offsets;
 use Koha::AdditionalFields;
 use Koha::AdditionalFieldValues;
 use Koha::Acquisition::Funds;
+use Koha::Acquisition::Booksellers;
 
 use File::Spec;
 use List::Util qw(min max);
@@ -75,10 +76,29 @@ sub configure {
             }
         );
 
+        # Get all vendors for the mapping table
+        my $vendors = Koha::Acquisition::Booksellers->search(
+            {},
+            {
+                order_by => 'name'
+            }
+        );
+
         # Get existing fund mappings
         my $fund_mappings_data =
           $self->retrieve_data('fund_subanalysis_mappings') || '{}';
         my $fund_mappings = eval { decode_json($fund_mappings_data) } || {};
+
+        # Get existing vendor mappings
+        my $vendor_supplier_data =
+          $self->retrieve_data('vendor_supplier_mappings') || '{}';
+        my $vendor_supplier_mappings =
+          eval { decode_json($vendor_supplier_data) } || {};
+
+        my $vendor_contract_data =
+          $self->retrieve_data('vendor_contract_mappings') || '{}';
+        my $vendor_contract_mappings =
+          eval { decode_json($vendor_contract_data) } || {};
         $template->param(
             transport_server     => $self->retrieve_data('transport_server'),
             transport_days       => $transport_days,
@@ -103,8 +123,15 @@ sub configure {
               $self->retrieve_data('default_income_subjective_offset'),
             default_income_subanalysis_offset =>
               $self->retrieve_data('default_income_subanalysis_offset'),
-            funds         => $funds,
-            fund_mappings => $fund_mappings
+            default_supplier_number =>
+              $self->retrieve_data('default_supplier_number'),
+            default_contract_number =>
+              $self->retrieve_data('default_contract_number'),
+            funds                    => $funds,
+            fund_mappings            => $fund_mappings,
+            vendors                  => $vendors,
+            vendor_supplier_mappings => $vendor_supplier_mappings,
+            vendor_contract_mappings => $vendor_contract_mappings
         );
 
         $self->output_html( $template->output() );
@@ -116,6 +143,8 @@ sub configure {
 
         # Process fund mapping data
         my %fund_mappings;
+        my %vendor_supplier_mappings;
+        my %vendor_contract_mappings;
         my @param_names = $cgi->param();
         for my $param_name (@param_names) {
             if ( $param_name =~ /^fund_(.+)$/ ) {
@@ -123,6 +152,20 @@ sub configure {
                 my $subanalysis_code = $cgi->param($param_name);
                 if ( $subanalysis_code && $subanalysis_code =~ /\S/ ) {
                     $fund_mappings{$fund_code} = $subanalysis_code;
+                }
+            }
+            elsif ( $param_name =~ /^vendor_supplier_(.+)$/ ) {
+                my $vendor_id      = $1;
+                my $supplier_number = $cgi->param($param_name);
+                if ( $supplier_number && $supplier_number =~ /\S/ ) {
+                    $vendor_supplier_mappings{$vendor_id} = $supplier_number;
+                }
+            }
+            elsif ( $param_name =~ /^vendor_contract_(.+)$/ ) {
+                my $vendor_id       = $1;
+                my $contract_number = $cgi->param($param_name);
+                if ( $contract_number && $contract_number =~ /\S/ ) {
+                    $vendor_contract_mappings{$vendor_id} = $contract_number;
                 }
             }
         }
@@ -152,7 +195,13 @@ sub configure {
                   scalar $cgi->param('default_income_subjective_offset'),
                 default_income_subanalysis_offset =>
                   scalar $cgi->param('default_income_subanalysis_offset'),
-                fund_subanalysis_mappings => encode_json( \%fund_mappings )
+                default_supplier_number =>
+                  scalar $cgi->param('default_supplier_number'),
+                default_contract_number =>
+                  scalar $cgi->param('default_contract_number'),
+                fund_subanalysis_mappings => encode_json( \%fund_mappings ),
+                vendor_supplier_mappings  => encode_json( \%vendor_supplier_mappings ),
+                vendor_contract_mappings  => encode_json( \%vendor_contract_mappings )
             }
         );
         $self->go_home();
@@ -492,14 +541,10 @@ sub _generate_invoices_report {
                 }
             }
 
-            # Get supplier number for first order
-            # (assuming all orders in invoice have same supplier)
-            my $first_order     = $invoice->_result->aqorders->first;
-            my $supplier_number = "";
-            if ($first_order) {
-                $supplier_number = $self->_map_fund_to_suppliernumber(
-                    $first_order->budget->budget_code );
-            }
+            # Get supplier number and contract number from vendor mappings
+            my $vendor_id       = $invoice->booksellerid;
+            my $supplier_number = $self->_get_vendor_supplier_number($vendor_id);
+            my $contract_number = $self->_get_vendor_contract_number($vendor_id);
 
             # Make invoice total negative for AP
             $invoice_total *= -1;
@@ -516,7 +561,7 @@ sub _generate_invoices_report {
                     $self->_format_oracle_date( $invoice->closedate )
                     ,                           # INVOICE_DATE
                     $supplier_number,           # SUPPLIER_NUMBER_PROPERTY_KEY
-                    "C50335",                   # CONTRACT_NUMBER
+                    $contract_number,           # CONTRACT_NUMBER
                     $self->_format_oracle_date( $invoice->shipmentdate )
                     ,      # SHIPMENT_DATE
                     "",    # LINE_AMOUNT (empty for header)
@@ -580,6 +625,40 @@ sub _get_acquisitions_subanalysis {
 
     # Fall back to configured default
     return $self->retrieve_data('default_acquisitions_subanalysis');
+}
+
+sub _get_vendor_supplier_number {
+    my ( $self, $vendor_id ) = @_;
+
+    # Get vendor to supplier number mappings from configuration
+    my $vendor_supplier_data =
+      $self->retrieve_data('vendor_supplier_mappings') || '{}';
+    my $vendor_mappings = eval { decode_json($vendor_supplier_data) } || {};
+
+    # Check if we have a specific mapping for this vendor
+    if ( $vendor_mappings->{$vendor_id} ) {
+        return $vendor_mappings->{$vendor_id};
+    }
+
+    # Fall back to configured default
+    return $self->retrieve_data('default_supplier_number');
+}
+
+sub _get_vendor_contract_number {
+    my ( $self, $vendor_id ) = @_;
+
+    # Get vendor to contract number mappings from configuration
+    my $vendor_contract_data =
+      $self->retrieve_data('vendor_contract_mappings') || '{}';
+    my $vendor_mappings = eval { decode_json($vendor_contract_data) } || {};
+
+    # Check if we have a specific mapping for this vendor
+    if ( $vendor_mappings->{$vendor_id} ) {
+        return $vendor_mappings->{$vendor_id};
+    }
+
+    # Fall back to configured default
+    return $self->retrieve_data('default_contract_number');
 }
 
 sub _get_acquisitions_distribution {

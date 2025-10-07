@@ -84,7 +84,7 @@ Which are 'Library', 'Vendor', 'Fund', 'Order line', 'Invoice' level.
   - Objective: Fixed ZZZ999 for all acquisitions
   - Subjective: Fixed 503000 for all acquisitions
   - SubAnalysis: Mapped from fund code via plugin configuration
-    - Configurable default fallback (default: 5999)
+    - Configurable default fallback (default: 5460)
     - Individual fund mappings set through plugin configuration interface
 
 ## Error handling, Archiving and Recovery

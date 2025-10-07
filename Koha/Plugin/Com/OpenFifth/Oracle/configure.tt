@@ -224,6 +224,26 @@
                                 <span class="hint">Used when debit type additional field 'Subanalysis' is empty</span>
                             </li>
                         </ol>
+
+                        <h4>Default Values for Income Offset Fields</h4>
+                        <div class="hint">These offset fields are used in the income report to balance transactions.</div>
+                        <ol>
+                            <li>
+                                <label for="default_income_costcentre_offset">Default cost centre offset code:</label>
+                                <input type="text" name="default_income_costcentre_offset" value="[% default_income_costcentre_offset || 'RZ00' %]" maxlength="10" />
+                                <span class="hint">Offset cost centre code for all income transactions</span>
+                            </li>
+                            <li>
+                                <label for="default_income_subjective_offset">Default subjective offset code:</label>
+                                <input type="text" name="default_income_subjective_offset" value="[% default_income_subjective_offset || '810400' %]" maxlength="10" />
+                                <span class="hint">Offset subjective code for all income transactions</span>
+                            </li>
+                            <li>
+                                <label for="default_income_subanalysis_offset">Default subanalysis offset code:</label>
+                                <input type="text" name="default_income_subanalysis_offset" value="[% default_income_subanalysis_offset || '8201' %]" maxlength="10" />
+                                <span class="hint">Offset subanalysis code for all income transactions</span>
+                            </li>
+                        </ol>
                     </fieldset>
                     <fieldset class="action">
                         <input type="hidden" name="save" value="1" />

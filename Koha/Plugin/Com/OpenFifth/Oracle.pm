@@ -97,8 +97,14 @@ sub configure {
             default_vat_code    => $self->retrieve_data('default_vat_code'),
             default_subjective  => $self->retrieve_data('default_subjective'),
             default_subanalysis => $self->retrieve_data('default_subanalysis'),
-            funds               => $funds,
-            fund_mappings       => $fund_mappings
+            default_income_costcentre_offset =>
+              $self->retrieve_data('default_income_costcentre_offset'),
+            default_income_subjective_offset =>
+              $self->retrieve_data('default_income_subjective_offset'),
+            default_income_subanalysis_offset =>
+              $self->retrieve_data('default_income_subanalysis_offset'),
+            funds         => $funds,
+            fund_mappings => $fund_mappings
         );
 
         $self->output_html( $template->output() );
@@ -140,6 +146,12 @@ sub configure {
                 default_subjective  => scalar $cgi->param('default_subjective'),
                 default_subanalysis =>
                   scalar $cgi->param('default_subanalysis'),
+                default_income_costcentre_offset =>
+                  scalar $cgi->param('default_income_costcentre_offset'),
+                default_income_subjective_offset =>
+                  scalar $cgi->param('default_income_subjective_offset'),
+                default_income_subanalysis_offset =>
+                  scalar $cgi->param('default_income_subanalysis_offset'),
                 fund_subanalysis_mappings => encode_json( \%fund_mappings )
             }
         );
@@ -549,8 +561,8 @@ sub _get_acquisitions_costcenter {
         }
     }
 
-    # Fall back to configured default or hardcoded default
-    return $self->retrieve_data('default_acquisitions_costcenter') || "RN05";
+    # Fall back to configured default
+    return $self->retrieve_data('default_acquisitions_costcenter');
 }
 
 sub _get_acquisitions_subanalysis {
@@ -566,8 +578,8 @@ sub _get_acquisitions_subanalysis {
         return $fund_mappings->{$fund_code};
     }
 
-    # Fall back to configured default or hardcoded default
-    return $self->retrieve_data('default_acquisitions_subanalysis') || '5460';
+    # Fall back to configured default
+    return $self->retrieve_data('default_acquisitions_subanalysis');
 }
 
 sub _get_acquisitions_distribution {
@@ -654,22 +666,24 @@ sub _generate_income_report {
                 { 'debit'  => 'debit_type_code' }
             ],
             group_by => [
-                'credit.branchcode',            'credit.credit_type_code',
-                'credit_type_code.description', 'debit.debit_type_code',
-                'debit_type_code.description',  'credit.payment_type',
-                { 'DATE' => 'credit.date' }
+                'credit.branchcode',            'debit.branchcode',
+                'credit.credit_type_code',      'credit_type_code.description',
+                'debit.debit_type_code',        'debit_type_code.description',
+                'credit.payment_type',          { 'DATE' => 'credit.date' }
             ],
             'select' => [
                 { sum => 'me.amount' },    'credit.branchcode',
-                'credit.credit_type_code', 'credit_type_code.description',
-                'debit.debit_type_code',   'debit_type_code.description',
-                'credit.payment_type', { 'DATE' => 'credit.date' }
+                'debit.branchcode',        'credit.credit_type_code',
+                'credit_type_code.description', 'debit.debit_type_code',
+                'debit_type_code.description', 'credit.payment_type',
+                { 'DATE' => 'credit.date' }
             ],
             'as' => [
-                'total_amount',     'branchcode',
-                'credit_type_code', 'credit_description',
-                'debit_type_code',  'debit_description',
-                'payment_type',     'transaction_date'
+                'total_amount',     'credit_branchcode',
+                'debit_branchcode', 'credit_type_code',
+                'credit_description', 'debit_type_code',
+                'debit_description', 'payment_type',
+                'transaction_date'
             ],
             order_by => [
                 { '-desc' => 'credit.date' }, 'credit.branchcode',
@@ -693,11 +707,12 @@ sub _generate_income_report {
 
             next if $amount_pence <= 0;    # Skip zero or negative amounts
 
-            my $library      = $row->get_column('branchcode') || 'UNKNOWN';
-            my $credit_type  = $row->get_column('credit_type_code');
-            my $debit_type   = $row->get_column('debit_type_code');
-            my $payment_type = $row->get_column('payment_type') || 'UNKNOWN';
-            my $date         = $row->get_column('transaction_date');
+            my $credit_branch = $row->get_column('credit_branchcode') || 'UNKNOWN';
+            my $debit_branch  = $row->get_column('debit_branchcode') || 'UNKNOWN';
+            my $credit_type   = $row->get_column('credit_type_code');
+            my $debit_type    = $row->get_column('debit_type_code');
+            my $payment_type  = $row->get_column('payment_type') || 'UNKNOWN';
+            my $date          = $row->get_column('transaction_date');
 
             # Generate document reference based on aggregation
             my $doc_reference = "AGG" . sprintf( "%06d", $line_number );
@@ -705,27 +720,36 @@ sub _generate_income_report {
             # Generate document description using new format
             my $doc_description =
                 dt_from_string($date)->strftime('%b%d/%y') . "/"
-              . $library
+              . $credit_branch
               . "-LIB-Income";
 
             # Get accounting date in Oracle format
             my $accounting_date = $self->_format_oracle_date($date);
 
-            # Get GL code mappings from branch and debit type additional fields
-            my $branch_fields = $self->_get_branch_additional_fields($library);
+            # Get GL code mappings from branches and debit type additional fields
+            # Credit branch = where payment was taken (for main fields)
+            # Debit branch = where charge originated (for offset fields)
+            my $credit_branch_fields =
+              $self->_get_branch_additional_fields($credit_branch);
+            my $debit_branch_fields =
+              $self->_get_branch_additional_fields($debit_branch);
             my $debit_fields =
               $self->_get_debit_type_additional_fields($debit_type);
 
-            my $cost_centre = $branch_fields->{'Income Cost Centre'};
-            my $objective   = $branch_fields->{'Income Objective'};
+            my $cost_centre = $credit_branch_fields->{'Income Cost Centre'};
+            my $objective   = $credit_branch_fields->{'Income Objective'};
             my $subjective  = $debit_fields->{'Subjective'};
             my $subanalysis = $debit_fields->{'Subanalysis'};
 
             # Get offset fields
-            my $cost_centre_offset = $cost_centre;  # Offset matches cost_centre
-            my $objective_offset   = $objective;    # Offset matches objective
-            my $subjective_offset  = '810400';      # Fixed value for all income
-            my $subanalysis_offset = '8201';        # Fixed value for all income
+            my $cost_centre_offset =
+              $self->retrieve_data('default_income_costcentre_offset');
+            my $objective_offset =
+              $debit_branch_fields->{'Income Objective'};    # From debit branch
+            my $subjective_offset =
+              $self->retrieve_data('default_income_subjective_offset');
+            my $subanalysis_offset =
+              $self->retrieve_data('default_income_subanalysis_offset');
 
             # Get VAT information using new codes
             my $vat_code   = $self->_get_debit_type_vat_code($debit_type);
@@ -864,14 +888,13 @@ sub _get_branch_additional_fields {
         }
     }
 
-    # Set defaults if not found in database
-    # (from configuration or hardcoded fallback)
+    # Set defaults if not found in database (from plugin configuration)
     $fields->{'Income Objective'} //=
-      $self->retrieve_data('default_branch_objective') || 'CUL074';
+      $self->retrieve_data('default_branch_objective');
     $fields->{'Income Cost Centre'} //=
-      $self->retrieve_data('default_income_costcentre') || 'RZ00';
+      $self->retrieve_data('default_income_costcentre');
     $fields->{'Acquisitions Cost Centre'} //=
-      $self->retrieve_data('default_branch_acquisitions_costcentre') || 'RN05';
+      $self->retrieve_data('default_branch_acquisitions_costcentre');
 
     # Cache the result
     $self->{branch_fields_cache}->{$branch_code} = $fields;
@@ -911,14 +934,11 @@ sub _get_debit_type_additional_fields {
         }
     }
 
-    # Set defaults if not found in database
-    # (from configuration or hardcoded fallback)
-    $fields->{'VAT Code'}   //= $self->retrieve_data('default_vat_code') || 'O';
+    # Set defaults if not found in database (from plugin configuration)
+    $fields->{'VAT Code'}   //= $self->retrieve_data('default_vat_code');
     $fields->{'Extra Code'} //= '';    # Always default to empty
-    $fields->{'Subjective'} //=
-      $self->retrieve_data('default_subjective') || '841800';
-    $fields->{'Subanalysis'} //=
-      $self->retrieve_data('default_subanalysis') || '8089';
+    $fields->{'Subjective'} //= $self->retrieve_data('default_subjective');
+    $fields->{'Subanalysis'} //= $self->retrieve_data('default_subanalysis');
 
     # Cache the result
     $self->{debit_type_fields_cache}->{$debit_type_code} = $fields;

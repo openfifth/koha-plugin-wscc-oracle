@@ -100,19 +100,14 @@
                             <h4>Acquisitions Invoice Report Fields</h4>
                             <p>Generated from acquisition data (<code>aqinvoices</code>, <code>aqorders</code>, <code>aqbudgets</code>):</p>
                             <ul>
-                                <li><strong>Cost Centre</strong>:
-                                    <ol>
-                                        <li>From branch additional field <code>acquisitions_costcenter</code> via order → fund → budget_branchcode</li>
-                                        <li>From configured default below</li>
-                                        <li>Hardcoded fallback: RN05</li>
-                                    </ol>
-                                </li>
+                                <li><strong>Cost Centre</strong>: From branch additional field via order → fund → budget_branchcode, or configured default</li>
                                 <li><strong>Objective</strong>: Hardcoded default ZZZ999</li>
                                 <li><strong>Subjective</strong>: Hardcoded default 503000</li>
-                                <li><strong>Subanalysis</strong>: From fund code mapping table below (with configurable default fallback)</li>
-                                <li><strong>Supplier Number</strong>: Mapped from fund code using internal lookup table</li>
+                                <li><strong>Subanalysis</strong>: From fund code mapping table (with configurable default)</li>
+                                <li><strong>Supplier Number</strong>: From vendor mapping table (with configurable default)</li>
+                                <li><strong>Contract Number</strong>: From vendor mapping table (with configurable default)</li>
                             </ul>
-                            <p><strong>Note:</strong> Fund code to subanalysis mapping is configured directly below, as Koha does not yet support additional fields for the acquisitions funds table.</p>
+                            <p><strong>Note:</strong> Since Koha does not support additional fields for funds or vendors tables, these mappings are configured directly below via plugin configuration.</p>
                         </div>
 
                         <ol>
@@ -123,8 +118,18 @@
                             </li>
                             <li>
                                 <label for="default_acquisitions_subanalysis">Default subanalysis code for unmapped funds:</label>
-                                <input type="text" name="default_acquisitions_subanalysis" value="[% default_acquisitions_subanalysis || '5999' %]" maxlength="10" />
+                                <input type="text" name="default_acquisitions_subanalysis" value="[% default_acquisitions_subanalysis || '5460' %]" maxlength="10" />
                                 <span class="hint">Used when no specific mapping is found for a fund code</span>
+                            </li>
+                            <li>
+                                <label for="default_supplier_number">Default supplier number for unmapped vendors:</label>
+                                <input type="text" name="default_supplier_number" value="[% default_supplier_number %]" maxlength="10" />
+                                <span class="hint">Used when no specific mapping is found for a vendor</span>
+                            </li>
+                            <li>
+                                <label for="default_contract_number">Default contract number for unmapped vendors:</label>
+                                <input type="text" name="default_contract_number" value="[% default_contract_number %]" maxlength="10" />
+                                <span class="hint">Used when no specific mapping is found for a vendor</span>
                             </li>
                         </ol>
 
@@ -156,6 +161,68 @@
                         [% ELSE %]
                         <div class="alert alert-warning">
                             No acquisition funds found. Please ensure you have created acquisition budgets and funds in Koha.
+                        </div>
+                        [% END %]
+
+                        <h4>Vendor to Supplier Number Mappings</h4>
+                        <div class="hint">Map vendors to their corresponding Oracle supplier numbers. Empty values will use the default above.</div>
+                        [% IF vendors.count %]
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Vendor ID</th>
+                                    <th>Vendor Name</th>
+                                    <th>Supplier Number</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                [% WHILE (vendor = vendors.next) %]
+                                <tr>
+                                    <td><strong>[% vendor.id | html %]</strong></td>
+                                    <td>[% vendor.name | html %]</td>
+                                    <td>
+                                        <input type="text" name="vendor_supplier_[% vendor.id | html %]"
+                                               value="[% vendor_supplier_mappings.${vendor.id} | html %]"
+                                               maxlength="10" size="8" />
+                                    </td>
+                                </tr>
+                                [% END %]
+                            </tbody>
+                        </table>
+                        [% ELSE %]
+                        <div class="alert alert-warning">
+                            No vendors found. Please ensure you have created vendors in Koha.
+                        </div>
+                        [% END %]
+
+                        <h4>Vendor to Contract Number Mappings</h4>
+                        <div class="hint">Map vendors to their corresponding Oracle contract numbers. Empty values will use the default above.</div>
+                        [% IF vendors.count %]
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Vendor ID</th>
+                                    <th>Vendor Name</th>
+                                    <th>Contract Number</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                [% WHILE (vendor = vendors.next) %]
+                                <tr>
+                                    <td><strong>[% vendor.id | html %]</strong></td>
+                                    <td>[% vendor.name | html %]</td>
+                                    <td>
+                                        <input type="text" name="vendor_contract_[% vendor.id | html %]"
+                                               value="[% vendor_contract_mappings.${vendor.id} | html %]"
+                                               maxlength="10" size="8" />
+                                    </td>
+                                </tr>
+                                [% END %]
+                            </tbody>
+                        </table>
+                        [% ELSE %]
+                        <div class="alert alert-warning">
+                            No vendors found. Please ensure you have created vendors in Koha.
                         </div>
                         [% END %]
                     </fieldset>

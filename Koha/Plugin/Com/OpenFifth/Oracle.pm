@@ -355,72 +355,95 @@ sub report_step2 {
     print $template->output();
 }
 
-sub sftp_upload {
+sub api_namespace {
+    my ( $self ) = @_;
+
+    return 'oracle';
+}
+
+sub api_routes {
     my ( $self, $args ) = @_;
-    my $cgi = $self->{'cgi'};
 
-    my $startdate = $cgi->param('from');
-    my $enddate   = $cgi->param('to');
-    my $type      = $cgi->param('type');
-
-    # Parse dates
-    if ($startdate) {
-        $startdate =~ s/^\s+//;
-        $startdate =~ s/\s+$//;
-        $startdate = eval { dt_from_string($startdate) };
-    }
-
-    if ($enddate) {
-        $enddate =~ s/^\s+//;
-        $enddate =~ s/\s+$//;
-        $enddate = eval { dt_from_string($enddate) };
-    }
-
-    # Get transport configuration
-    my $transport =
-      Koha::File::Transports->find( $self->retrieve_data('transport_server') );
-
-    unless ($transport) {
-        print $cgi->header('application/json');
-        print '{"success": false, "message": "No SFTP transport configured"}';
-        return;
-    }
-
-    # Generate report
-    my $filename = $self->_generate_filename($type);
-    my $report =
-      $self->_generate_report( $startdate, $enddate, $type, $filename );
-
-    unless ($report) {
-        print $cgi->header('application/json');
-        print '{"success": false, "message": "Failed to generate report"}';
-        return;
-    }
-
-    # Upload to SFTP
-    eval {
-        $transport->connect;
-        open my $fh, '<', \$report;
-        my $upload_result = $transport->file_upload( $fh, $filename );
-        close $fh;
-
-        if ($upload_result) {
-            print $cgi->header('application/json');
-            print
-'{"success": true, "message": "File uploaded successfully to SFTP server", "filename": "'
-              . $filename . '"}';
-        }
-        else {
-            print $cgi->header('application/json');
-            print
-'{"success": false, "message": "Failed to upload file to SFTP server"}';
+    my $spec = {
+        "/upload" => {
+            "post" => {
+                "x-mojo-to" => "Com::OpenFifth::Oracle::UploadController#upload",
+                "operationId" => "OracleUpload",
+                "tags" => ["oracle"],
+                "parameters" => [
+                    {
+                        "name" => "from",
+                        "in" => "formData",
+                        "description" => "Start date for report",
+                        "required" => \1,
+                        "type" => "string"
+                    },
+                    {
+                        "name" => "to",
+                        "in" => "formData",
+                        "description" => "End date for report",
+                        "required" => \1,
+                        "type" => "string"
+                    },
+                    {
+                        "name" => "type",
+                        "in" => "formData",
+                        "description" => "Report type (income or invoices)",
+                        "required" => \1,
+                        "type" => "string"
+                    }
+                ],
+                "produces" => [
+                    "application/json"
+                ],
+                "responses" => {
+                    "200" => {
+                        "description" => "Upload successful",
+                        "schema" => {
+                            "type" => "object",
+                            "properties" => {
+                                "success" => {
+                                    "description" => "Success status",
+                                    "type" => "boolean"
+                                },
+                                "message" => {
+                                    "description" => "Success message",
+                                    "type" => "string"
+                                },
+                                "filename" => {
+                                    "description" => "Generated filename",
+                                    "type" => "string"
+                                }
+                            }
+                        }
+                    },
+                    "400" => {
+                        "description" => "Upload failed",
+                        "schema" => {
+                            "type" => "object",
+                            "properties" => {
+                                "success" => {
+                                    "description" => "Success status",
+                                    "type" => "boolean"
+                                },
+                                "message" => {
+                                    "description" => "Error message",
+                                    "type" => "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-koha-authorization" => {
+                    "permissions" => {
+                        "plugins" => "1"
+                    }
+                }
+            }
         }
     };
 
-    if ($@) {
-        print $cgi->header('application/json');
-        print '{"success": false, "message": "SFTP upload error: ' . $@ . '"}';
-    }
+    return $spec;
 }
 
 sub _generate_report {

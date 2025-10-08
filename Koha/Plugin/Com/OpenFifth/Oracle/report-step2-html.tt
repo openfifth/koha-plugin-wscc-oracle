@@ -162,16 +162,14 @@ $(document).ready(function() {
         
         // Get data attributes
         var params = {
-            class: button.data('class'),
-            method: 'sftp_upload',
             from: button.data('from'),
             to: button.data('to'),
             type: button.data('type')
         };
-        
+
         // Make AJAX request
         $.ajax({
-            url: '/cgi-bin/koha/plugins/run.pl',
+            url: '/api/v1/contrib/oracle/upload',
             type: 'POST',
             data: params,
             dataType: 'json',

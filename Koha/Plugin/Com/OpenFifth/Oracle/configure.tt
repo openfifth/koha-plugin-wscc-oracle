@@ -86,6 +86,16 @@
                                 [% END %]
                                 </select>
                             </li>
+                            <li>
+                                <label for="upload_dir_income">Upload directory for income reports:</label>
+                                <input type="text" name="upload_dir_income" value="[% upload_dir_income %]" size="50" />
+                                <span class="hint">Optional: Specify a directory path for income reports (e.g., /income or income/). Leave empty to upload to the server's default directory.</span>
+                            </li>
+                            <li>
+                                <label for="upload_dir_invoices">Upload directory for invoice reports:</label>
+                                <input type="text" name="upload_dir_invoices" value="[% upload_dir_invoices %]" size="50" />
+                                <span class="hint">Optional: Specify a directory path for invoice reports (e.g., /invoices or invoices/). Leave empty to upload to the server's default directory.</span>
+                            </li>
                         </ol>
                         [% ELSE %]
                         <div class="alert alert-info">

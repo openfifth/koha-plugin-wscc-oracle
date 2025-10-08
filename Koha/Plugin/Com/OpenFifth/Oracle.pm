@@ -104,6 +104,8 @@ sub configure {
             transport_days       => $transport_days,
             output               => $self->retrieve_data('output'),
             available_transports => $available_transports,
+            upload_dir_income    => $self->retrieve_data('upload_dir_income'),
+            upload_dir_invoices  => $self->retrieve_data('upload_dir_invoices'),
             default_acquisitions_costcenter =>
               $self->retrieve_data('default_acquisitions_costcenter'),
             default_acquisitions_subanalysis =>
@@ -172,9 +174,11 @@ sub configure {
 
         $self->store_data(
             {
-                transport_server => scalar $cgi->param('transport_server'),
-                transport_days   => $days_str,
-                output           => scalar $cgi->param('output'),
+                transport_server    => scalar $cgi->param('transport_server'),
+                transport_days      => $days_str,
+                output              => scalar $cgi->param('output'),
+                upload_dir_income   => scalar $cgi->param('upload_dir_income'),
+                upload_dir_invoices => scalar $cgi->param('upload_dir_invoices'),
                 default_acquisitions_costcenter =>
                   scalar $cgi->param('default_acquisitions_costcenter'),
                 default_acquisitions_subanalysis =>
@@ -241,21 +245,40 @@ sub cronjob_nightly {
       $now->clone->subtract( days => ( $today - $previous_day ) % 7 );
     my $end_date = $now;
 
-    my $filename = $self->_generate_filename();
-    my $report   = $self->_generate_report( $start_date, $end_date, $filename );
-    if ($report) {
+    # Generate both income and invoices reports
+    my @report_types = ('income', 'invoices');
+    my $all_success = 1;
+
+    for my $type (@report_types) {
+        my $filename = $self->_generate_filename($type);
+        my $report = $self->_generate_report( $start_date, $end_date, $type, $filename );
+
+        next unless $report;
 
         if ( $output eq 'upload' ) {
+            # Get configured upload directory for this report type
+            my $upload_dir = $type eq 'income'
+                ? $self->retrieve_data('upload_dir_income')
+                : $self->retrieve_data('upload_dir_invoices');
+
+            # Construct upload path (directory + filename)
+            my $upload_path = $filename;
+            if ($upload_dir && $upload_dir =~ /\S/) {
+                # Remove leading/trailing slashes and ensure proper format
+                $upload_dir =~ s{^/+}{};
+                $upload_dir =~ s{/+$}{};
+                $upload_path = $upload_dir ? "$upload_dir/$filename" : $filename;
+            }
+
             $transport->connect;
             open my $fh, '<', \$report;
-            if ( $transport->upload_file( $fh, $filename ) ) {
+            if ( $transport->upload_file( $fh, $upload_path ) ) {
                 close $fh;
-                return 1;
             }
             else {
-                # Deal with transport errors?
+                # Upload failed for this report type
                 close $fh;
-                return 0;
+                $all_success = 0;
             }
         }
         else {
@@ -265,11 +288,10 @@ sub cronjob_nightly {
               or die "Unable to open $file_path: $!";
             print $fh $report;
             close($fh);
-            return 1;
         }
     }
 
-    return 1;
+    return $all_success;
 }
 
 sub report {

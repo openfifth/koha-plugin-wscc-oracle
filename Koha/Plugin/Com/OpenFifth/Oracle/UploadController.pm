@@ -84,11 +84,25 @@ sub upload {
             );
         }
 
+        # Get configured upload directory for this report type
+        my $upload_dir = $type eq 'income'
+            ? $plugin->retrieve_data('upload_dir_income')
+            : $plugin->retrieve_data('upload_dir_invoices');
+
+        # Construct upload path (directory + filename)
+        my $upload_path = $filename;
+        if ($upload_dir && $upload_dir =~ /\S/) {
+            # Remove leading/trailing slashes and ensure single trailing slash
+            $upload_dir =~ s{^/+}{};
+            $upload_dir =~ s{/+$}{};
+            $upload_path = $upload_dir ? "$upload_dir/$filename" : $filename;
+        }
+
         # Upload to SFTP
         eval {
             $transport->connect;
             open my $fh, '<', \$report;
-            my $upload_result = $transport->upload_file( $fh, $filename );
+            my $upload_result = $transport->upload_file( $fh, $upload_path );
             close $fh;
 
             if ($upload_result) {

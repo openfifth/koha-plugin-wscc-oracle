@@ -19,11 +19,15 @@
 | Inbound / Outbound                          | Inbound                                           |
 | Accept / Reject Atomic Transaction Criteria | Standard Oracle functionality will determine.     |
 
+## CSV File Format
+
+The CSV file does not include a header line and there is only one type of record.
+
 ## Oracle CSV Fields
 
 | Field No. | Source Field               | Type   | Description                                      | Sample Data                    |
 | --------: | :------------------------- | :----- | :----------------------------------------------- | :----------------------------- |
-|         1 | D_Document Document Number | TEXT   | Any Reference Number from O5TH                   | SAMPLE1                        |
+|         1 | D_Document Document Number | TEXT   | Any Reference Number from O5TH                   | AGG000001                      |
 |         2 | D_Document Description     | TEXT   | `<slip_no>”-“<branch>”-LIB-Income”`              | SEP15/20/CN-Crawley-LIB-Income |
 |         3 | D_Document Date            | TEXT   | Accounting Date                                  | 2025/03/21                     |
 |         4 | D_Line Number              | TEXT   | Line Number                                      | 1                              |

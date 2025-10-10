@@ -46,6 +46,8 @@ INVOICE_NUMBER,INVOICE_TOTAL,INVOICE_DATE,SUPPLIER_NUMBER_PROPERTY_KEY,CONTRACT_
 
 ### Header Records (Fields 1-6 populated, 7-15 empty)
 
+**One line per invoice closed**
+
 | Field Position | Field Name                    | Source                      | Sample Data      | Comments                                 |
 | -------------- | ----------------------------- | --------------------------- | ---------------- | ---------------------------------------- |
 | 1              | INVOICE_NUMBER                | invoice.invoicenumber       | INV-KOHA-RBKC-31 | Invoice number from Koha                 |
@@ -56,7 +58,21 @@ INVOICE_NUMBER,INVOICE_TOTAL,INVOICE_DATE,SUPPLIER_NUMBER_PROPERTY_KEY,CONTRACT_
 | 6              | SHIPMENT_DATE                 | invoice.shipmentdate        | 03/20/2025       | Date of shipment                         |
 | 7-15           | (LINE_AMOUNT through LIN_NUM) | Empty                       | (empty)          | Empty fields for header records          |
 
+#### Koha field mappings
+
+1. Invoice Number = Koha invoicenumber
+2. Invoice Total = Sum, in pence, of all line records 'unitprice \* quantity receipted' for the invoice
+   _Question_: Should this total be tax inclusive or tax exclusive?
+3. Invoice Date = Closed date for invoice in YYYY/MM/DD format
+4. Supplier Number = WSCC Local number used to identify suppliers.
+   Mapped using the plugin configuration, Koha vendor to supplier number as per Appendix A.
+5. Contract Number = WSCC Local number used to identify supplier contracts.
+   May be undefined, awaiting contracts list. Will be exposed in Plugin Configuration as an optional mapping for vendor to contract number.
+6. Shipment Date = Shipment date for invoice in YYYY/MM/DD format
+
 ### Line Records (Field 1 populated, 2-6 empty, 7-15 populated)
+
+**One line per unit received**
 
 | Field Position | Field Name                            | Source                      | Sample Data                   | Comments                         |
 | -------------- | ------------------------------------- | --------------------------- | ----------------------------- | -------------------------------- |
@@ -72,23 +88,58 @@ INVOICE_NUMBER,INVOICE_TOTAL,INVOICE_DATE,SUPPLIER_NUMBER_PROPERTY_KEY,CONTRACT_
 | 14             | SUBANALYSIS                           | Fund-based mapping          | 5460                          | Mapped from fund code            |
 | 15             | LIN_NUM                               | Line sequence               | 1                             | Line number within invoice       |
 
-## Koha Field mappings
+#### Koha Field mappings
 
-Confirmation required for where we should map Cost Centre, Objective, Subjective, Subanalysis and Offsets from.
-Which are 'Library', 'Vendor', 'Fund', 'Order line', 'Invoice' level.
+1. Invoice Number = Koha invoicenumber (Will match Header record for invoice)
 
-## Additional notes
+7) Line Amount = Unit price
+   _Question_: Should this amount be tax inclusive or tax exclusive
 
-- For accounts payable, for each item purchased we must set Cost Center, Objective, Subjective and SubAnalysis.
-  - Cost Center: Default RN05, configurable via `Acquisitions Cost Centre` additional field on branches table
-  - Objective: Fixed ZZZ999 for all acquisitions
-  - Subjective: Fixed 503000 for all acquisitions
-  - SubAnalysis: Mapped from fund code via plugin configuration
-    - Configurable default fallback (default: 5460)
-    - Individual fund mappings set through plugin configuration interface
+8. Tax Amount = Tax value on receipt
+9. Tax Code = Mapped from 'Tax rate on receipt', 20% = 'STANDARD', 0% = 'ZERO', anything else = 'UNMAPPED'
+10. Description = Mapped to 'Biblio title' unless there is no biblio attached, 'Library Materials' otherwise
+11. Cost Centre = Mapped using an 'Additional Field' named 'Acquisitions Cost Centre' linked to the 'Branch' for the budget used with a configurable default, currently set to 'RN05'
+12. Objective = Hard coded to 'ZZZ999', should be a configurable default and optionally a configurable mapping mapped to ?
+13. Subjective = Hard coded to '503000', should be a configurable default and optionally a configurable mapping mapped to ?
+14. Subanalysis = Mapped from 'Budget' using Plugin Configuration, configurable default currently set to '5460'
+15. Line number = Running count of lines in the invoice indexed from '1'.
 
 ## Error handling, Archiving and Recovery
 
 Oracle will send emails to the business when parsing errors are encountered.
 
 No specific requirements at the Koha side for archival or audit trail.
+
+## Appendix A - Vendor Supplier Numbers
+
+| Supplier No | Vendor name                   |
+| ----------- | ----------------------------- |
+| 57028       | Askews                        |
+| 6565        | Ulverscroft                   |
+| 101563      | BOLINDA DIGITAL LTD           |
+| 109562      | DIGITAL LIBRARY LTD           |
+| 90134       | CENGAGE LEARNING EMEA LTD     |
+| 4614        | OXFORD UNIVERSITY PRESS       |
+| 52423       | BIBLIOGRAPHICAL DATA SERVICES |
+| 97296       | iSUBSCRiBE LTD                |
+| 46075       | ENCYCLOPAEDIA BRITANNICA      |
+| 14673       | Nielsen                       |
+| 98804       | COBWEB INFORMATION LTD        |
+| 102661      | JCS ONLINE RESOURCES LIMITED  |
+| 105721      | NEWS UK &amp; IRELAND LTD     |
+| 98865       | WELL INFORMED LIMITED         |
+| 43401       | OCLC (UK) LTD                 |
+| 97663       | BOOKS ASIA                    |
+| 113279      | MOODYS ANALYTICS UK LIMITED   |
+| 61107       | LATITUDE MAPPING LTD          |
+| 41600       | BAG BOOKS                     |
+| 55571       | FOYLES                        |
+| 114305      | IBISWORLD LTD                 |
+| 888         | THE BRITISH LIBRARY           |
+| 51470       | ASCEL                         |
+| 97068       | CALIBRE AUDIO LIBRARY         |
+| 109358      | OVERDRIVE GLOBAL LIMITED      |
+| 754         | BOOK PROTECTORS &amp; CO      |
+| 46700       | WEST SUSSEX ARCHIVE SOCIETY   |
+| 6146        | SUSSEX ARCHAEOLOGICAL SOCIETY |
+| 6183        | SUSSEX ORNITHOLOGICAL SOCIETY |

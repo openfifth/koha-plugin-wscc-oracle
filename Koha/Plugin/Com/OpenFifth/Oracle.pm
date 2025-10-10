@@ -943,42 +943,6 @@ sub _format_oracle_date {
     return $date;
 }
 
-sub _map_fund_to_suppliernumber {
-    my ( $self, $fund ) = @_;
-    my $map = {
-        KAFI   => 4539,
-        KANF   => 4539,
-        KARC   => 4539,
-        KBAS   => 4539,
-        KCFI   => 4539,
-        KCHG   => 4539,
-        KCNF   => 4539,
-        KCOM   => 4539,
-        KEBE   => 4539,
-        KELE   => 4539,
-        KERE   => 5190,
-        KFSO   => 4539,
-        KHLS   => 4539,
-        KLPR   => 4539,
-        KNHC   => 4539,
-        KNSO   => 4539,
-        KPER   => 4625,
-        KRCHI  => 4539,
-        KREF   => 4539,
-        KREFSO => 4539,
-        KREP   => 4539,
-        KREQ   => 4539,
-        KRFI   => 4539,
-        KRNF   => 4539,
-        KSPO   => 4539,
-        KSSS   => 4539,
-        KVAT   => 4539,
-        KYAD   => 4539,
-    };
-    my $return = defined( $map->{$fund} ) ? $map->{$fund} : '4539';
-    return $return;
-}
-
 # Get branch additional field values with caching
 sub _get_branch_additional_fields {
     my ( $self, $branch_code ) = @_;

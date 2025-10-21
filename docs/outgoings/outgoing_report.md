@@ -53,8 +53,8 @@ INVOICE_NUMBER,INVOICE_TOTAL,INVOICE_DATE,SUPPLIER_NUMBER_PROPERTY_KEY,CONTRACT_
 | 1              | INVOICE_NUMBER                | invoice.invoicenumber       | INV-KOHA-RBKC-31 | Invoice number from Koha                 |
 | 2              | INVOICE_TOTAL                 | Calculated from order lines | 5200             | Sum of all line amounts for invoice      |
 | 3              | INVOICE_DATE                  | invoice.closedate           | 03/21/2025       | Date invoice was closed in Koha          |
-| 4              | SUPPLIER_NUMBER_PROPERTY_KEY  | Fund-based mapping          | 3513             | Mapped from fund code to supplier number |
-| 5              | CONTRACT_NUMBER               | Constant                    | C50335           | Fixed contract number                    |
+| 4              | SUPPLIER_NUMBER_PROPERTY_KEY  | Vendor-based mapping        | 3513             | Mapped from vendor ID to supplier number |
+| 5              | CONTRACT_NUMBER               | Vendor-based mapping        | C50335           | Mapped from vendor ID to contract number |
 | 6              | SHIPMENT_DATE                 | invoice.shipmentdate        | 03/20/2025       | Date of shipment                         |
 | 7-15           | (LINE_AMOUNT through LIN_NUM) | Empty                       | (empty)          | Empty fields for header records          |
 
@@ -65,28 +65,29 @@ INVOICE_NUMBER,INVOICE_TOTAL,INVOICE_DATE,SUPPLIER_NUMBER_PROPERTY_KEY,CONTRACT_
    _Question_: Should this total be tax inclusive or tax exclusive?
 3. Invoice Date = Closed date for invoice in YYYY/MM/DD format
 4. Supplier Number = WSCC Local number used to identify suppliers.
-   Mapped using the plugin configuration, Koha vendor to supplier number as per Appendix A.
+   Mapped from vendor ID using the plugin's 'Vendor Field Mappings' configuration, with configurable default.
+   See Appendix A for supplier number mappings.
 5. Contract Number = WSCC Local number used to identify supplier contracts.
-   May be undefined, awaiting contracts list. Will be exposed in Plugin Configuration as an optional mapping for vendor to contract number.
+   Mapped from vendor ID using the plugin's 'Vendor Field Mappings' configuration, with configurable default.
 6. Shipment Date = Shipment date for invoice in YYYY/MM/DD format
 
 ### Line Records (Field 1 populated, 2-6 empty, 7-15 populated)
 
 **One line per unit received**
 
-| Field Position | Field Name                            | Source                      | Sample Data                   | Comments                         |
-| -------------- | ------------------------------------- | --------------------------- | ----------------------------- | -------------------------------- |
-| 1              | INVOICE_NUMBER                        | invoice.invoicenumber       | INV-KOHA-RBKC-31              | Links line to header record      |
-| 2-6            | (INVOICE_TOTAL through SHIPMENT_DATE) | Empty                       | (empty)                       | Empty fields for line records    |
-| 7              | LINE_AMOUNT                           | line.unitprice \* quantity  | 4000                          | Line amount in pence             |
-| 8              | TAX_AMOUNT                            | line.tax_value_on_receiving | 0                             | Tax amount in pence              |
-| 9              | TAX_CODE                              | Derived from tax rate       | ZERO / STANDARD               | ZERO (0%), STANDARD (20%)        |
-| 10             | DESCRIPTION                           | biblio.title or default     | Invoice for educational books | Item description                 |
-| 11             | COST_CENTRE_PROPERTY_KEY              | Constant                    | RN05                          | Cost center for all acquisitions |
-| 12             | OBJECTIVE                             | Constant                    | ZZZ999                        | Objective for all acquisitions   |
-| 13             | SUBJECTIVE                            | Constant                    | 503000                        | Subjective for all acquisitions  |
-| 14             | SUBANALYSIS                           | Fund-based mapping          | 5460                          | Mapped from fund code            |
-| 15             | LIN_NUM                               | Line sequence               | 1                             | Line number within invoice       |
+| Field Position | Field Name                            | Source                      | Sample Data                   | Comments                            |
+| -------------- | ------------------------------------- | --------------------------- | ----------------------------- | ----------------------------------- |
+| 1              | INVOICE_NUMBER                        | invoice.invoicenumber       | INV-KOHA-RBKC-31              | Links line to header record         |
+| 2-6            | (INVOICE_TOTAL through SHIPMENT_DATE) | Empty                       | (empty)                       | Empty fields for line records       |
+| 7              | LINE_AMOUNT                           | line.unitprice \* quantity  | 4000                          | Line amount in pence                |
+| 8              | TAX_AMOUNT                            | line.tax_value_on_receiving | 0                             | Tax amount in pence                 |
+| 9              | TAX_CODE                              | Derived from tax rate       | ZERO / STANDARD               | ZERO (0%), STANDARD (20%)           |
+| 10             | DESCRIPTION                           | biblio.title or default     | Invoice for educational books | Item description                    |
+| 11             | COST_CENTRE_PROPERTY_KEY              | Fund-based mapping          | RN05                          | Mapped from fund code (default: RN05) |
+| 12             | OBJECTIVE                             | Fund-based mapping          | ZZZ999                        | Mapped from fund code (default: ZZZ999) |
+| 13             | SUBJECTIVE                            | Fund-based mapping          | 503000                        | Mapped from fund code (default: 503000) |
+| 14             | SUBANALYSIS                           | Fund-based mapping          | 5460                          | Mapped from fund code (default: 5460) |
+| 15             | LIN_NUM                               | Line sequence               | 1                             | Line number within invoice          |
 
 #### Koha Field mappings
 
@@ -98,11 +99,13 @@ INVOICE_NUMBER,INVOICE_TOTAL,INVOICE_DATE,SUPPLIER_NUMBER_PROPERTY_KEY,CONTRACT_
 8. Tax Amount = Tax value on receipt
 9. Tax Code = Mapped from 'Tax rate on receipt', 20% = 'STANDARD', 0% = 'ZERO', anything else = 'UNMAPPED'
 10. Description = Mapped to 'Biblio title' unless there is no biblio attached, 'Library Materials' otherwise
-11. Cost Centre = Mapped using an 'Additional Field' named 'Acquisitions Cost Centre' linked to the 'Branch' for the budget used with a configurable default, currently set to 'RN05'
-12. Objective = Hard coded to 'ZZZ999', should be a configurable default and optionally a configurable mapping mapped to ?
-13. Subjective = Hard coded to '503000', should be a configurable default and optionally a configurable mapping mapped to ?
-14. Subanalysis = Mapped from 'Budget' using Plugin Configuration, configurable default currently set to '5460'
+11. Cost Centre = Mapped from fund code using Plugin's 'Fund Field Mappings' configuration table, with configurable default (default: RN05)
+12. Objective = Mapped from fund code using Plugin's 'Fund Field Mappings' configuration table, with configurable default (default: ZZZ999)
+13. Subjective = Mapped from fund code using Plugin's 'Fund Field Mappings' configuration table, with configurable default (default: 503000)
+14. Subanalysis = Mapped from fund code using Plugin's 'Fund Field Mappings' configuration table, with configurable default (default: 5460)
 15. Line number = Running count of lines in the invoice indexed from '1'.
+
+**Note on Fund-Level Mappings:** All COA fields (Cost Centre, Objective, Subjective, Subanalysis) are configured at the budget/fund level via the plugin's configuration interface under "Fund Field Mappings". This allows different funds to have different accounting codes as required by Oracle Finance. If no specific mapping is configured for a fund, the system uses the configurable defaults.
 
 ## Error handling, Archiving and Recovery
 

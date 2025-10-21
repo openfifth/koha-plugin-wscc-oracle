@@ -86,7 +86,7 @@ sub configure {
 
         # Get existing fund mappings
         my $fund_mappings_data =
-          $self->retrieve_data('fund_subanalysis_mappings') || '{}';
+          $self->retrieve_data('fund_field_mappings') || '{}';
         my $fund_mappings = eval { decode_json($fund_mappings_data) } || {};
 
         # Get existing vendor mappings
@@ -108,14 +108,16 @@ sub configure {
             upload_dir_invoices  => $self->retrieve_data('upload_dir_invoices'),
             default_acquisitions_costcenter =>
               $self->retrieve_data('default_acquisitions_costcenter'),
+            default_acquisitions_objective =>
+              $self->retrieve_data('default_acquisitions_objective'),
+            default_acquisitions_subjective =>
+              $self->retrieve_data('default_acquisitions_subjective'),
             default_acquisitions_subanalysis =>
               $self->retrieve_data('default_acquisitions_subanalysis'),
             default_income_costcentre =>
               $self->retrieve_data('default_income_costcentre'),
             default_branch_objective =>
               $self->retrieve_data('default_branch_objective'),
-            default_branch_acquisitions_costcentre =>
-              $self->retrieve_data('default_branch_acquisitions_costcentre'),
             default_vat_code    => $self->retrieve_data('default_vat_code'),
             default_subjective  => $self->retrieve_data('default_subjective'),
             default_subanalysis => $self->retrieve_data('default_subanalysis'),
@@ -149,15 +151,19 @@ sub configure {
         my %vendor_contract_mappings;
         my @param_names = $cgi->param();
         for my $param_name (@param_names) {
-            if ( $param_name =~ /^fund_(.+)$/ ) {
-                my $fund_code        = $1;
-                my $subanalysis_code = $cgi->param($param_name);
-                if ( $subanalysis_code && $subanalysis_code =~ /\S/ ) {
-                    $fund_mappings{$fund_code} = $subanalysis_code;
+            if ( $param_name =~
+                /^fund_(costcenter|objective|subjective|subanalysis)_(.+)$/ )
+            {
+                my $field_type = $1;
+                my $fund_code  = $2;
+                my $value      = $cgi->param($param_name);
+                if ( $value && $value =~ /\S/ ) {
+                    $fund_mappings{$fund_code} ||= {};
+                    $fund_mappings{$fund_code}{$field_type} = $value;
                 }
             }
             elsif ( $param_name =~ /^vendor_supplier_(.+)$/ ) {
-                my $vendor_id      = $1;
+                my $vendor_id       = $1;
                 my $supplier_number = $cgi->param($param_name);
                 if ( $supplier_number && $supplier_number =~ /\S/ ) {
                     $vendor_supplier_mappings{$vendor_id} = $supplier_number;
@@ -178,17 +184,20 @@ sub configure {
                 transport_days      => $days_str,
                 output              => scalar $cgi->param('output'),
                 upload_dir_income   => scalar $cgi->param('upload_dir_income'),
-                upload_dir_invoices => scalar $cgi->param('upload_dir_invoices'),
+                upload_dir_invoices =>
+                  scalar $cgi->param('upload_dir_invoices'),
                 default_acquisitions_costcenter =>
                   scalar $cgi->param('default_acquisitions_costcenter'),
+                default_acquisitions_objective =>
+                  scalar $cgi->param('default_acquisitions_objective'),
+                default_acquisitions_subjective =>
+                  scalar $cgi->param('default_acquisitions_subjective'),
                 default_acquisitions_subanalysis =>
                   scalar $cgi->param('default_acquisitions_subanalysis'),
                 default_income_costcentre =>
                   scalar $cgi->param('default_income_costcentre'),
                 default_branch_objective =>
                   scalar $cgi->param('default_branch_objective'),
-                default_branch_acquisitions_costcentre =>
-                  scalar $cgi->param('default_branch_acquisitions_costcentre'),
                 default_vat_code    => scalar $cgi->param('default_vat_code'),
                 default_subjective  => scalar $cgi->param('default_subjective'),
                 default_subanalysis =>
@@ -203,9 +212,11 @@ sub configure {
                   scalar $cgi->param('default_supplier_number'),
                 default_contract_number =>
                   scalar $cgi->param('default_contract_number'),
-                fund_subanalysis_mappings => encode_json( \%fund_mappings ),
-                vendor_supplier_mappings  => encode_json( \%vendor_supplier_mappings ),
-                vendor_contract_mappings  => encode_json( \%vendor_contract_mappings )
+                fund_field_mappings      => encode_json( \%fund_mappings ),
+                vendor_supplier_mappings =>
+                  encode_json( \%vendor_supplier_mappings ),
+                vendor_contract_mappings =>
+                  encode_json( \%vendor_contract_mappings )
             }
         );
         $self->go_home();
@@ -246,28 +257,33 @@ sub cronjob_nightly {
     my $end_date = $now;
 
     # Generate both income and invoices reports
-    my @report_types = ('income', 'invoices');
-    my $all_success = 1;
+    my @report_types = ( 'income', 'invoices' );
+    my $all_success  = 1;
 
     for my $type (@report_types) {
         my $filename = $self->_generate_filename($type);
-        my $report = $self->_generate_report( $start_date, $end_date, $type, $filename );
+        my $report =
+          $self->_generate_report( $start_date, $end_date, $type, $filename );
 
         next unless $report;
 
         if ( $output eq 'upload' ) {
+
             # Get configured upload directory for this report type
-            my $upload_dir = $type eq 'income'
-                ? $self->retrieve_data('upload_dir_income')
-                : $self->retrieve_data('upload_dir_invoices');
+            my $upload_dir =
+                $type eq 'income'
+              ? $self->retrieve_data('upload_dir_income')
+              : $self->retrieve_data('upload_dir_invoices');
 
             # Construct upload path (directory + filename)
             my $upload_path = $filename;
-            if ($upload_dir && $upload_dir =~ /\S/) {
+            if ( $upload_dir && $upload_dir =~ /\S/ ) {
+
                 # Remove leading/trailing slashes and ensure proper format
                 $upload_dir =~ s{^/+}{};
                 $upload_dir =~ s{/+$}{};
-                $upload_path = $upload_dir ? "$upload_dir/$filename" : $filename;
+                $upload_path =
+                  $upload_dir ? "$upload_dir/$filename" : $filename;
             }
 
             $transport->connect;
@@ -378,7 +394,7 @@ sub report_step2 {
 }
 
 sub api_namespace {
-    my ( $self ) = @_;
+    my ($self) = @_;
 
     return 'oracle';
 }
@@ -389,68 +405,67 @@ sub api_routes {
     my $spec = {
         "/upload" => {
             "post" => {
-                "x-mojo-to" => "Com::OpenFifth::Oracle::UploadController#upload",
+                "x-mojo-to" =>
+                  "Com::OpenFifth::Oracle::UploadController#upload",
                 "operationId" => "OracleUpload",
-                "tags" => ["oracle"],
-                "parameters" => [
+                "tags"        => ["oracle"],
+                "parameters"  => [
                     {
-                        "name" => "from",
-                        "in" => "formData",
+                        "name"        => "from",
+                        "in"          => "formData",
                         "description" => "Start date for report",
-                        "required" => \1,
-                        "type" => "string"
+                        "required"    => \1,
+                        "type"        => "string"
                     },
                     {
-                        "name" => "to",
-                        "in" => "formData",
+                        "name"        => "to",
+                        "in"          => "formData",
                         "description" => "End date for report",
-                        "required" => \1,
-                        "type" => "string"
+                        "required"    => \1,
+                        "type"        => "string"
                     },
                     {
-                        "name" => "type",
-                        "in" => "formData",
+                        "name"        => "type",
+                        "in"          => "formData",
                         "description" => "Report type (income or invoices)",
-                        "required" => \1,
-                        "type" => "string"
+                        "required"    => \1,
+                        "type"        => "string"
                     }
                 ],
-                "produces" => [
-                    "application/json"
-                ],
+                "produces"  => ["application/json"],
                 "responses" => {
                     "200" => {
                         "description" => "Upload successful",
-                        "schema" => {
-                            "type" => "object",
+                        "schema"      => {
+                            "type"       => "object",
                             "properties" => {
                                 "success" => {
                                     "description" => "Success status",
-                                    "type" => "boolean"
+                                    "type"        => "boolean"
                                 },
                                 "message" => {
                                     "description" => "Success message",
-                                    "type" => "string"
+                                    "type"        => "string"
                                 },
                                 "filename" => {
                                     "description" => "Generated filename",
-                                    "type" => "string"
+                                    "type"        => "string"
                                 }
                             }
                         }
                     },
                     "400" => {
                         "description" => "Upload failed",
-                        "schema" => {
-                            "type" => "object",
+                        "schema"      => {
+                            "type"       => "object",
                             "properties" => {
                                 "success" => {
                                     "description" => "Success status",
-                                    "type" => "boolean"
+                                    "type"        => "boolean"
                                 },
                                 "message" => {
                                     "description" => "Error message",
-                                    "type" => "string"
+                                    "type"        => "string"
                                 }
                             }
                         }
@@ -522,7 +537,7 @@ sub _generate_invoices_report {
 
         # Start with header line matching new client requirements
         my @header_line =
-          qw(INVOICE_NUMBER INVOICE_TOTAL INVOICE_DATE SUPPLIER_NUMBER_PROPERTY_KEY CONTRACT_NUMBER SHIPMENT_DATE LINE_AMOUNT TAX_AMOUNT TAX_CODE DESCRIPTION COST_CENTRE_PROPERTY_KEY OBJECTIVE SUBJECTIVE SUBANALYSIS LIN_NUM);
+          qw(INVOICE_NUMBER INVOICE_TOTAL INVOICE_DATE SUPPLIER_NUMBER CONTRACT_NUMBER SHIPMENT_DATE LINE_AMOUNT TAX_AMOUNT TAX_CODE DESCRIPTION COST_CENTRE OBJECTIVE SUBJECTIVE SUBANALYSIS LIN_NUM);
         my $worked = $csv->print( $fh, \@header_line );
 
         while ( my $invoice = $invoices->next ) {
@@ -566,37 +581,41 @@ sub _generate_invoices_report {
                 for my $qty_unit ( 1 .. $quantity ) {
                     push @orderlines, [
                         $invoice->invoicenumber,    # INVOICE_NUMBER
-                        "",    # INVOICE_TOTAL (empty for line)
-                        "",    # INVOICE_DATE (empty for line)
-                        "",    # SUPPLIER_NUMBER_PROPERTY_KEY (empty for line)
-                        "",    # CONTRACT_NUMBER (empty for line)
-                        "",    # SHIPMENT_DATE (empty for line)
-                        $unitprice,                 # LINE_AMOUNT
+                        "",            # INVOICE_TOTAL (empty for line)
+                        "",            # INVOICE_DATE (empty for line)
+                        "",            # SUPPLIER_NUMBER (empty for line)
+                        "",            # CONTRACT_NUMBER (empty for line)
+                        "",            # SHIPMENT_DATE (empty for line)
+                        $unitprice,    # LINE_AMOUNT
                         $tax_value_on_receiving,    # TAX_AMOUNT
                         $tax_code,                  # TAX_CODE
                         $description,               # DESCRIPTION
-                        $self->_get_acquisitions_costcenter($line)
-                        ,            # COST_CENTRE_PROPERTY_KEY
-                        "ZZZ999",    # OBJECTIVE (default for all funds)
-                        "503000",    # SUBJECTIVE (default for all funds)
+                        $self->_get_acquisitions_costcenter($budget_code)
+                        ,                           # COST_CENTRE
+                        $self->_get_acquisitions_objective($budget_code)
+                        ,                           # OBJECTIVE
+                        $self->_get_acquisitions_subjective($budget_code)
+                        ,                           # SUBJECTIVE
                         $self->_get_acquisitions_subanalysis($budget_code)
-                        ,                # SUBANALYSIS
-                        $line_count++    # LIN_NUM
+                        ,                           # SUBANALYSIS
+                        $line_count++               # LIN_NUM
                     ];
                 }
             }
 
             # Get supplier number and contract number from vendor mappings
-            my $vendor_id       = $invoice->booksellerid;
-            my $supplier_number = $self->_get_vendor_supplier_number($vendor_id);
-            my $contract_number = $self->_get_vendor_contract_number($vendor_id);
+            my $vendor_id = $invoice->booksellerid;
+            my $supplier_number =
+              $self->_get_vendor_supplier_number($vendor_id);
+            my $contract_number =
+              $self->_get_vendor_contract_number($vendor_id);
 
             # Make invoice total negative for AP
             $invoice_total *= -1;
 
             # Build header record with new format (15 fields)
             # Header record: INVOICE_NUMBER, INVOICE_TOTAL,
-            # INVOICE_DATE, SUPPLIER_NUMBER_PROPERTY_KEY,
+            # INVOICE_DATE, SUPPLIER_NUMBER,
             # CONTRACT_NUMBER, SHIPMENT_DATE, then empty fields
             $csv->print(
                 $fh,
@@ -605,19 +624,19 @@ sub _generate_invoices_report {
                     $invoice_total,             # INVOICE_TOTAL
                     $self->_format_oracle_date( $invoice->closedate )
                     ,                           # INVOICE_DATE
-                    $supplier_number,           # SUPPLIER_NUMBER_PROPERTY_KEY
+                    $supplier_number,           # SUPPLIER_NUMBER
                     $contract_number,           # CONTRACT_NUMBER
                     $self->_format_oracle_date( $invoice->shipmentdate )
-                    ,      # SHIPMENT_DATE
-                    "",    # LINE_AMOUNT (empty for header)
-                    "",    # TAX_AMOUNT (empty for header)
-                    "",    # TAX_CODE (empty for header)
-                    "",    # DESCRIPTION (empty for header)
-                    "",    # COST_CENTRE_PROPERTY_KEY (empty for header)
-                    "",    # OBJECTIVE (empty for header)
-                    "",    # SUBJECTIVE (empty for header)
-                    "",    # SUBANALYSIS (empty for header)
-                    ""     # LIN_NUM (empty for header)
+                    ,                           # SHIPMENT_DATE
+                    "",                         # LINE_AMOUNT (empty for header)
+                    "",                         # TAX_AMOUNT (empty for header)
+                    "",                         # TAX_CODE (empty for header)
+                    "",                         # DESCRIPTION (empty for header)
+                    "",                         # COST_CENTRE (empty for header)
+                    "",                         # OBJECTIVE (empty for header)
+                    "",                         # SUBJECTIVE (empty for header)
+                    "",                         # SUBANALYSIS (empty for header)
+                    ""                          # LIN_NUM (empty for header)
                 ]
             );
 
@@ -634,25 +653,60 @@ sub _generate_invoices_report {
 }
 
 sub _get_acquisitions_costcenter {
-    my ( $self, $order_line ) = @_;
+    my ( $self, $fund_code ) = @_;
 
-    # If we have an order line, try to get cost center
-    # from branch additional fields
-    if ($order_line) {
-        my $fund = $order_line->fund;
-        if ( $fund && $fund->budget_branchcode ) {
-            my $branch_fields =
-              $self->_get_branch_additional_fields( $fund->budget_branchcode );
-            if (   $branch_fields
-                && $branch_fields->{'Acquisitions Cost Centre'} )
-            {
-                return $branch_fields->{'Acquisitions Cost Centre'};
-            }
-        }
+    # Get configured fund mappings
+    my $fund_mappings_data =
+      $self->retrieve_data('fund_field_mappings') || '{}';
+    my $fund_mappings = eval { decode_json($fund_mappings_data) } || {};
+
+    # Check if we have a specific mapping for this fund
+    if (   $fund_mappings->{$fund_code}
+        && $fund_mappings->{$fund_code}{costcenter} )
+    {
+        return $fund_mappings->{$fund_code}{costcenter};
     }
 
     # Fall back to configured default
     return $self->retrieve_data('default_acquisitions_costcenter');
+}
+
+sub _get_acquisitions_objective {
+    my ( $self, $fund_code ) = @_;
+
+    # Get configured fund mappings
+    my $fund_mappings_data =
+      $self->retrieve_data('fund_field_mappings') || '{}';
+    my $fund_mappings = eval { decode_json($fund_mappings_data) } || {};
+
+    # Check if we have a specific mapping for this fund
+    if (   $fund_mappings->{$fund_code}
+        && $fund_mappings->{$fund_code}{objective} )
+    {
+        return $fund_mappings->{$fund_code}{objective};
+    }
+
+    # Fall back to configured default
+    return $self->retrieve_data('default_acquisitions_objective');
+}
+
+sub _get_acquisitions_subjective {
+    my ( $self, $fund_code ) = @_;
+
+    # Get configured fund mappings
+    my $fund_mappings_data =
+      $self->retrieve_data('fund_field_mappings') || '{}';
+    my $fund_mappings = eval { decode_json($fund_mappings_data) } || {};
+
+    # Check if we have a specific mapping for this fund
+    if (   $fund_mappings->{$fund_code}
+        && $fund_mappings->{$fund_code}{subjective} )
+    {
+        return $fund_mappings->{$fund_code}{subjective};
+    }
+
+    # Fall back to configured default
+    return $self->retrieve_data('default_acquisitions_subjective');
 }
 
 sub _get_acquisitions_subanalysis {
@@ -660,12 +714,14 @@ sub _get_acquisitions_subanalysis {
 
     # Get configured fund mappings
     my $fund_mappings_data =
-      $self->retrieve_data('fund_subanalysis_mappings') || '{}';
+      $self->retrieve_data('fund_field_mappings') || '{}';
     my $fund_mappings = eval { decode_json($fund_mappings_data) } || {};
 
     # Check if we have a specific mapping for this fund
-    if ( $fund_mappings->{$fund_code} ) {
-        return $fund_mappings->{$fund_code};
+    if (   $fund_mappings->{$fund_code}
+        && $fund_mappings->{$fund_code}{subanalysis} )
+    {
+        return $fund_mappings->{$fund_code}{subanalysis};
     }
 
     # Fall back to configured default
@@ -707,12 +763,12 @@ sub _get_vendor_contract_number {
 }
 
 sub _get_acquisitions_distribution {
-    my ( $self, $fund, $order_line ) = @_;
-    my $company     = "1000";      # Default company code
-    my $costcenter  = $self->_get_acquisitions_costcenter($order_line);
-    my $objective   = "ZZZ999";    # Default objective for all funds
-    my $subjective  = "503000";    # Default subjective for all funds
-    my $subanalysis = $self->_get_acquisitions_subanalysis($fund);
+    my ( $self, $fund_code ) = @_;
+    my $company     = "1000";    # Default company code
+    my $costcenter  = $self->_get_acquisitions_costcenter($fund_code);
+    my $objective   = $self->_get_acquisitions_objective($fund_code);
+    my $subjective  = $self->_get_acquisitions_subjective($fund_code);
+    my $subanalysis = $self->_get_acquisitions_subanalysis($fund_code);
     my $spare1      = "000000";
     my $spare2      = "000000";
 
@@ -790,23 +846,23 @@ sub _generate_income_report {
                 { 'debit'  => 'debit_type_code' }
             ],
             group_by => [
-                'credit.branchcode',            'debit.branchcode',
-                'credit.credit_type_code',      'credit_type_code.description',
-                'debit.debit_type_code',        'debit_type_code.description',
-                'credit.payment_type',          { 'DATE' => 'credit.date' }
+                'credit.branchcode',       'debit.branchcode',
+                'credit.credit_type_code', 'credit_type_code.description',
+                'debit.debit_type_code',   'debit_type_code.description',
+                'credit.payment_type', { 'DATE' => 'credit.date' }
             ],
             'select' => [
-                { sum => 'me.amount' },    'credit.branchcode',
-                'debit.branchcode',        'credit.credit_type_code',
+                { sum => 'me.amount' },         'credit.branchcode',
+                'debit.branchcode',             'credit.credit_type_code',
                 'credit_type_code.description', 'debit.debit_type_code',
-                'debit_type_code.description', 'credit.payment_type',
+                'debit_type_code.description',  'credit.payment_type',
                 { 'DATE' => 'credit.date' }
             ],
             'as' => [
-                'total_amount',     'credit_branchcode',
-                'debit_branchcode', 'credit_type_code',
+                'total_amount',       'credit_branchcode',
+                'debit_branchcode',   'credit_type_code',
                 'credit_description', 'debit_type_code',
-                'debit_description', 'payment_type',
+                'debit_description',  'payment_type',
                 'transaction_date'
             ],
             order_by => [
@@ -831,12 +887,14 @@ sub _generate_income_report {
 
             next if $amount_pence <= 0;    # Skip zero or negative amounts
 
-            my $credit_branch = $row->get_column('credit_branchcode') || 'UNKNOWN';
-            my $debit_branch  = $row->get_column('debit_branchcode') || 'UNKNOWN';
-            my $credit_type   = $row->get_column('credit_type_code');
-            my $debit_type    = $row->get_column('debit_type_code');
-            my $payment_type  = $row->get_column('payment_type') || 'UNKNOWN';
-            my $date          = $row->get_column('transaction_date');
+            my $credit_branch =
+              $row->get_column('credit_branchcode') || 'UNKNOWN';
+            my $debit_branch =
+              $row->get_column('debit_branchcode') || 'UNKNOWN';
+            my $credit_type  = $row->get_column('credit_type_code');
+            my $debit_type   = $row->get_column('debit_type_code');
+            my $payment_type = $row->get_column('payment_type') || 'UNKNOWN';
+            my $date         = $row->get_column('transaction_date');
 
             # Generate document reference based on aggregation
             my $doc_reference = "AGG" . sprintf( "%06d", $line_number );
@@ -850,9 +908,9 @@ sub _generate_income_report {
             # Get accounting date in Oracle format
             my $accounting_date = $self->_format_oracle_date($date);
 
-            # Get GL code mappings from branches and debit type additional fields
-            # Credit branch = where payment was taken (for main fields)
-            # Debit branch = where charge originated (for offset fields)
+           # Get GL code mappings from branches and debit type additional fields
+           # Credit branch = where payment was taken (for main fields)
+           # Debit branch = where charge originated (for offset fields)
             my $credit_branch_fields =
               $self->_get_branch_additional_fields($credit_branch);
             my $debit_branch_fields =
@@ -955,8 +1013,7 @@ sub _get_branch_additional_fields {
     my $additional_fields = Koha::AdditionalFields->search(
         {
             tablename => 'branches',
-            name      =>
-              [ 'Income Objective', 'Income Cost Centre', 'Acquisitions Cost Centre' ]
+            name      => [ 'Income Objective', 'Income Cost Centre' ]
         }
     );
 
@@ -981,8 +1038,6 @@ sub _get_branch_additional_fields {
       $self->retrieve_data('default_branch_objective');
     $fields->{'Income Cost Centre'} //=
       $self->retrieve_data('default_income_costcentre');
-    $fields->{'Acquisitions Cost Centre'} //=
-      $self->retrieve_data('default_branch_acquisitions_costcentre');
 
     # Cache the result
     $self->{branch_fields_cache}->{$branch_code} = $fields;
@@ -1023,9 +1078,9 @@ sub _get_debit_type_additional_fields {
     }
 
     # Set defaults if not found in database (from plugin configuration)
-    $fields->{'VAT Code'}   //= $self->retrieve_data('default_vat_code');
-    $fields->{'Extra Code'} //= '';    # Always default to empty
-    $fields->{'Subjective'} //= $self->retrieve_data('default_subjective');
+    $fields->{'VAT Code'}    //= $self->retrieve_data('default_vat_code');
+    $fields->{'Extra Code'}  //= '';    # Always default to empty
+    $fields->{'Subjective'}  //= $self->retrieve_data('default_subjective');
     $fields->{'Subanalysis'} //= $self->retrieve_data('default_subanalysis');
 
     # Cache the result

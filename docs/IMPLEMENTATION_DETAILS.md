@@ -32,9 +32,20 @@ use Koha::AdditionalFieldValues;
 
 #### `_get_branch_additional_fields($branch_code)`
 
-- Retrieves Title Case field names: `Income Objective`, `Income Cost Centre`, `Acquisitions Cost Centre`
+- Retrieves Title Case field names: `Income Objective`, `Income Cost Centre`
 - Uses same caching pattern as debit type lookups
 - Returns defaults from plugin configuration or hardcoded fallbacks
+
+#### Acquisitions Field Accessor Methods
+
+Since Koha does not support additional fields for the `aqbudgets` table, acquisitions COA mappings are configured at the budget/fund level via plugin configuration:
+
+- `_get_acquisitions_costcenter($fund_code)` - Returns cost center for a fund
+- `_get_acquisitions_objective($fund_code)` - Returns objective for a fund
+- `_get_acquisitions_subjective($fund_code)` - Returns subjective for a fund
+- `_get_acquisitions_subanalysis($fund_code)` - Returns subanalysis for a fund
+
+These methods query the plugin's `fund_field_mappings` configuration and fall back to configurable defaults.
 
 ### 4. Updated Mapping Functions
 
@@ -94,9 +105,10 @@ INSERT INTO additional_fields (tablename, name, ...) VALUES
 ```sql
 INSERT INTO additional_fields (tablename, name, ...) VALUES
 ('branches', 'Income Objective', ...),
-('branches', 'Income Cost Centre', ...),
-('branches', 'Acquisitions Cost Centre', ...);
+('branches', 'Income Cost Centre', ...);
 ```
+
+**Note**: Acquisitions COA codes (Cost Centre, Objective, Subjective, Subanalysis) are configured at the budget/fund level via the plugin's Fund Field Mappings configuration table, not as branch additional fields.
 
 ### Setup Scripts
 
@@ -146,21 +158,37 @@ The Oracle finance integration requires valid COA (Chart of Accounts) combinatio
 
 ### COA Storage Approach
 
-#### 1. Branch-Level COA Codes
+#### 1. Income Report: Branch-Level COA Codes
 
 Store branch-specific accounting codes using additional fields on the `branches` table:
 
 **Implemented Additional Fields for branches:**
 
 - `Income Cost Centre` - Cost Centre code for income transactions (e.g., RN03, RQ30)
-- `Acquisitions Cost Centre` - Cost Centre code for acquisitions transactions (e.g., RN05)
-- `Income Objective` - Objective code (e.g., CUL001-CUL037, CUL074)
+- `Income Objective` - Objective code for income (e.g., CUL001-CUL037, CUL074)
 
 **Benefits:**
 
 - Library staff can configure per-branch via Admin → Libraries interface
 - Supports multi-region library systems with different accounting structures
 - Cached by plugin for performance
+
+#### 1b. Acquisitions Report: Budget/Fund-Level COA Codes
+
+Store fund-specific accounting codes using plugin configuration (since Koha does not support additional fields for `aqbudgets` table):
+
+**Implemented Fund Field Mappings (via plugin configuration):**
+
+- `Costcenter` - Cost Centre code for acquisitions transactions (e.g., RN05)
+- `Objective` - Objective code for the fund (e.g., ZZZ999)
+- `Subjective` - Subjective code for the fund (e.g., 503000)
+- `Subanalysis` - Subanalysis code for the fund (e.g., 5460)
+
+**Benefits:**
+
+- Per-fund configuration provides granular control over COA mappings
+- Configurable through plugin interface without requiring Koha core changes
+- Supports different COA codes for different fund types or purposes
 
 #### 2. Debit Type COA Mapping
 
@@ -199,17 +227,25 @@ The plugin implements a two-tier default value precedence system:
 
 **Configurable defaults (set via populate_plugin_defaults.sql or plugin configuration):**
 
+**Income Report Defaults:**
 - Default Income Cost Centre (default: RN03)
 - Default Branch Objective (default: CUL074)
-- Default Branch Acquisitions Cost Centre (default: RN05)
-- Default Acquisitions Cost Center (default: RN05)
-- Default Acquisitions Subanalysis (default: 5460)
 - Default VAT Code (default: O - Out of Scope)
 - Default Subjective (default: 841800)
 - Default Subanalysis (default: 8089)
 - Default Income Cost Centre Offset (default: RZ00)
 - Default Income Subjective Offset (default: 810400)
 - Default Income Subanalysis Offset (default: 8201)
+
+**Acquisitions Report Defaults (Fund-Level):**
+- Default Acquisitions Cost Center (default: RN05)
+- Default Acquisitions Objective (default: ZZZ999)
+- Default Acquisitions Subjective (default: 503000)
+- Default Acquisitions Subanalysis (default: 5460)
+
+**Vendor Mapping Defaults:**
+- Default Supplier Number
+- Default Contract Number
 
 #### 5. Setup and Installation
 

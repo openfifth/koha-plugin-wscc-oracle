@@ -110,10 +110,10 @@
                             <h4>Acquisitions Invoice Report Fields</h4>
                             <p>Generated from acquisition data (<code>aqinvoices</code>, <code>aqorders</code>, <code>aqbudgets</code>):</p>
                             <ul>
-                                <li><strong>Cost Centre</strong>: From branch additional field via order → fund → budget_branchcode, or configured default</li>
-                                <li><strong>Objective</strong>: Hardcoded default ZZZ999</li>
-                                <li><strong>Subjective</strong>: Hardcoded default 503000</li>
-                                <li><strong>Subanalysis</strong>: From fund code mapping table (with configurable default)</li>
+                                <li><strong>Cost Centre</strong>: From fund field mapping table (with configurable default)</li>
+                                <li><strong>Objective</strong>: From fund field mapping table (with configurable default)</li>
+                                <li><strong>Subjective</strong>: From fund field mapping table (with configurable default)</li>
+                                <li><strong>Subanalysis</strong>: From fund field mapping table (with configurable default)</li>
                                 <li><strong>Supplier Number</strong>: From vendor mapping table (with configurable default)</li>
                                 <li><strong>Contract Number</strong>: From vendor mapping table (with configurable default)</li>
                             </ul>
@@ -124,12 +124,22 @@
                             <li>
                                 <label for="default_acquisitions_costcenter">Default cost center for acquisitions:</label>
                                 <input type="text" name="default_acquisitions_costcenter" value="[% default_acquisitions_costcenter || 'RN05' %]" maxlength="10" />
-                                <span class="hint">Used when no cost center is found via branch additional fields</span>
+                                <span class="hint">Used when no cost center mapping is found for a fund code</span>
                             </li>
                             <li>
-                                <label for="default_acquisitions_subanalysis">Default subanalysis code for unmapped funds:</label>
+                                <label for="default_acquisitions_objective">Default objective for acquisitions:</label>
+                                <input type="text" name="default_acquisitions_objective" value="[% default_acquisitions_objective || 'ZZZ999' %]" maxlength="10" />
+                                <span class="hint">Used when no objective mapping is found for a fund code</span>
+                            </li>
+                            <li>
+                                <label for="default_acquisitions_subjective">Default subjective for acquisitions:</label>
+                                <input type="text" name="default_acquisitions_subjective" value="[% default_acquisitions_subjective || '503000' %]" maxlength="10" />
+                                <span class="hint">Used when no subjective mapping is found for a fund code</span>
+                            </li>
+                            <li>
+                                <label for="default_acquisitions_subanalysis">Default subanalysis code for acquisitions:</label>
                                 <input type="text" name="default_acquisitions_subanalysis" value="[% default_acquisitions_subanalysis || '5460' %]" maxlength="10" />
-                                <span class="hint">Used when no specific mapping is found for a fund code</span>
+                                <span class="hint">Used when no subanalysis mapping is found for a fund code</span>
                             </li>
                             <li>
                                 <label for="default_supplier_number">Default supplier number for unmapped vendors:</label>
@@ -143,15 +153,18 @@
                             </li>
                         </ol>
 
-                        <h4>Fund Code to Subanalysis Mappings</h4>
-                        <div class="hint">Map fund codes to their corresponding subanalysis codes for Oracle reporting. Empty values will use the default above.</div>
+                        <h4>Fund Field Mappings</h4>
+                        <div class="hint">Map fund codes to their corresponding Oracle COA fields for acquisitions reporting. Empty values will use the defaults above.</div>
                         [% IF funds.count %]
                         <table class="table table-striped">
                             <thead>
                                 <tr>
                                     <th>Fund Code</th>
                                     <th>Budget Name</th>
-                                    <th>Subanalysis Code</th>
+                                    <th>Costcenter</th>
+                                    <th>Objective</th>
+                                    <th>Subjective</th>
+                                    <th>Subanalysis</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -160,8 +173,23 @@
                                     <td><strong>[% fund.budget_code | html %]</strong></td>
                                     <td>[% fund.budget_name | html %]</td>
                                     <td>
-                                        <input type="text" name="fund_[% fund.budget_code | html %]"
-                                               value="[% fund_mappings.${fund.budget_code} | html %]"
+                                        <input type="text" name="fund_costcenter_[% fund.budget_code | html %]"
+                                               value="[% fund_mappings.${fund.budget_code}.costcenter | html %]"
+                                               maxlength="10" size="8" />
+                                    </td>
+                                    <td>
+                                        <input type="text" name="fund_objective_[% fund.budget_code | html %]"
+                                               value="[% fund_mappings.${fund.budget_code}.objective | html %]"
+                                               maxlength="10" size="8" />
+                                    </td>
+                                    <td>
+                                        <input type="text" name="fund_subjective_[% fund.budget_code | html %]"
+                                               value="[% fund_mappings.${fund.budget_code}.subjective | html %]"
+                                               maxlength="10" size="8" />
+                                    </td>
+                                    <td>
+                                        <input type="text" name="fund_subanalysis_[% fund.budget_code | html %]"
+                                               value="[% fund_mappings.${fund.budget_code}.subanalysis | html %]"
                                                maxlength="10" size="8" />
                                     </td>
                                 </tr>
@@ -231,9 +259,8 @@
 
                             <h6>For Library Branches (<code>branches</code> table)</h6>
                             <ul>
-                                <li><strong>Objective</strong>: Library-specific objective codes (e.g., CUL001, CUL002)</li>
+                                <li><strong>Income Objective</strong>: Library-specific objective codes for income (e.g., CUL001, CUL002)</li>
                                 <li><strong>Income Cost Centre</strong>: Cost center codes for income transactions</li>
-                                <li><strong>Acquisitions Cost Centre</strong>: Cost center codes for acquisitions transactions</li>
                             </ul>
                         </div>
 
@@ -248,12 +275,7 @@
                             <li>
                                 <label for="default_branch_objective">Default objective for branches:</label>
                                 <input type="text" name="default_branch_objective" value="[% default_branch_objective || 'CUL074' %]" maxlength="10" />
-                                <span class="hint">Used when branch additional field 'Objective' is empty</span>
-                            </li>
-                            <li>
-                                <label for="default_branch_acquisitions_costcentre">Default acquisitions cost centre for branches:</label>
-                                <input type="text" name="default_branch_acquisitions_costcentre" value="[% default_branch_acquisitions_costcentre || 'RN05' %]" maxlength="10" />
-                                <span class="hint">Used when branch additional field 'Acquisitions Cost Centre' is empty</span>
+                                <span class="hint">Used when branch additional field 'Income Objective' is empty</span>
                             </li>
                             <li>
                                 <label for="default_vat_code">Default VAT code:</label>

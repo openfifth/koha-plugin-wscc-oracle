@@ -174,8 +174,8 @@
                         </div>
                         [% END %]
 
-                        <h4>Vendor to Supplier Number Mappings</h4>
-                        <div class="hint">Map vendors to their corresponding Oracle supplier numbers. Empty values will use the default above.</div>
+                        <h4>Vendor Field Mappings</h4>
+                        <div class="hint">Map vendors to their corresponding Oracle supplier numbers and contract numbers. Empty values will use the defaults above.</div>
                         [% IF vendors.count %]
                         <table class="table table-striped">
                             <thead>
@@ -183,6 +183,7 @@
                                     <th>Vendor ID</th>
                                     <th>Vendor Name</th>
                                     <th>Supplier Number</th>
+                                    <th>Contract Number</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -195,32 +196,6 @@
                                                value="[% vendor_supplier_mappings.${vendor.id} | html %]"
                                                maxlength="10" size="8" />
                                     </td>
-                                </tr>
-                                [% END %]
-                            </tbody>
-                        </table>
-                        [% ELSE %]
-                        <div class="alert alert-warning">
-                            No vendors found. Please ensure you have created vendors in Koha.
-                        </div>
-                        [% END %]
-
-                        <h4>Vendor to Contract Number Mappings</h4>
-                        <div class="hint">Map vendors to their corresponding Oracle contract numbers. Empty values will use the default above.</div>
-                        [% IF vendors.count %]
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Vendor ID</th>
-                                    <th>Vendor Name</th>
-                                    <th>Contract Number</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                [% WHILE (vendor = vendors.next) %]
-                                <tr>
-                                    <td><strong>[% vendor.id | html %]</strong></td>
-                                    <td>[% vendor.name | html %]</td>
                                     <td>
                                         <input type="text" name="vendor_contract_[% vendor.id | html %]"
                                                value="[% vendor_contract_mappings.${vendor.id} | html %]"

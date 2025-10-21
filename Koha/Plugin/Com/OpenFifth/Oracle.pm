@@ -19,7 +19,7 @@ use Mojo::JSON qw{ decode_json encode_json };
 use Text::CSV  qw( csv );
 use C4::Context;
 
-our $VERSION = '0.0.31';
+our $VERSION = '0.1.0';
 
 our $metadata = {
     name => 'Oracle Finance Integration',

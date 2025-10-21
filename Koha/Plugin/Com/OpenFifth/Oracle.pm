@@ -127,11 +127,7 @@ sub configure {
               $self->retrieve_data('default_income_subjective_offset'),
             default_income_subanalysis_offset =>
               $self->retrieve_data('default_income_subanalysis_offset'),
-            default_supplier_number =>
-              $self->retrieve_data('default_supplier_number'),
-            default_contract_number =>
-              $self->retrieve_data('default_contract_number'),
-            funds                    => $funds,
+            funds => $funds,
             fund_mappings            => $fund_mappings,
             vendors                  => $vendors,
             vendor_supplier_mappings => $vendor_supplier_mappings,
@@ -208,11 +204,7 @@ sub configure {
                   scalar $cgi->param('default_income_subjective_offset'),
                 default_income_subanalysis_offset =>
                   scalar $cgi->param('default_income_subanalysis_offset'),
-                default_supplier_number =>
-                  scalar $cgi->param('default_supplier_number'),
-                default_contract_number =>
-                  scalar $cgi->param('default_contract_number'),
-                fund_field_mappings      => encode_json( \%fund_mappings ),
+                fund_field_mappings => encode_json( \%fund_mappings ),
                 vendor_supplier_mappings =>
                   encode_json( \%vendor_supplier_mappings ),
                 vendor_contract_mappings =>
@@ -736,13 +728,8 @@ sub _get_vendor_supplier_number {
       $self->retrieve_data('vendor_supplier_mappings') || '{}';
     my $vendor_mappings = eval { decode_json($vendor_supplier_data) } || {};
 
-    # Check if we have a specific mapping for this vendor
-    if ( $vendor_mappings->{$vendor_id} ) {
-        return $vendor_mappings->{$vendor_id};
-    }
-
-    # Fall back to configured default
-    return $self->retrieve_data('default_supplier_number');
+    # Return mapping for this vendor (no default - must be configured)
+    return $vendor_mappings->{$vendor_id};
 }
 
 sub _get_vendor_contract_number {
@@ -753,13 +740,8 @@ sub _get_vendor_contract_number {
       $self->retrieve_data('vendor_contract_mappings') || '{}';
     my $vendor_mappings = eval { decode_json($vendor_contract_data) } || {};
 
-    # Check if we have a specific mapping for this vendor
-    if ( $vendor_mappings->{$vendor_id} ) {
-        return $vendor_mappings->{$vendor_id};
-    }
-
-    # Fall back to configured default
-    return $self->retrieve_data('default_contract_number');
+    # Return mapping for this vendor (no default - must be configured)
+    return $vendor_mappings->{$vendor_id};
 }
 
 sub _get_acquisitions_distribution {

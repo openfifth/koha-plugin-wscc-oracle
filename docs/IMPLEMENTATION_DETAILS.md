@@ -243,9 +243,8 @@ The plugin implements a two-tier default value precedence system:
 - Default Acquisitions Subjective (default: 503000)
 - Default Acquisitions Subanalysis (default: 5460)
 
-**Vendor Mapping Defaults:**
-- Default Supplier Number
-- Default Contract Number
+**Vendor Mappings:**
+Vendor-to-supplier and vendor-to-contract mappings must be configured for all vendors. There are no default values - unmapped vendors will result in empty fields in the report.
 
 #### 5. Setup and Installation
 

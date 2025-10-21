@@ -65,10 +65,12 @@ INVOICE_NUMBER,INVOICE_TOTAL,INVOICE_DATE,SUPPLIER_NUMBER_PROPERTY_KEY,CONTRACT_
    _Question_: Should this total be tax inclusive or tax exclusive?
 3. Invoice Date = Closed date for invoice in YYYY/MM/DD format
 4. Supplier Number = WSCC Local number used to identify suppliers.
-   Mapped from vendor ID using the plugin's 'Vendor Field Mappings' configuration, with configurable default.
+   Mapped from vendor ID using the plugin's 'Vendor Field Mappings' configuration.
+   All vendors must be mapped - there is no default. Unmapped vendors will have empty supplier numbers.
    See Appendix A for supplier number mappings.
 5. Contract Number = WSCC Local number used to identify supplier contracts.
-   Mapped from vendor ID using the plugin's 'Vendor Field Mappings' configuration, with configurable default.
+   Mapped from vendor ID using the plugin's 'Vendor Field Mappings' configuration.
+   All vendors must be mapped - there is no default. Unmapped vendors will have empty contract numbers.
 6. Shipment Date = Shipment date for invoice in YYYY/MM/DD format
 
 ### Line Records (Field 1 populated, 2-6 empty, 7-15 populated)

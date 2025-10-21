@@ -114,8 +114,8 @@
                                 <li><strong>Objective</strong>: From fund field mapping table (with configurable default)</li>
                                 <li><strong>Subjective</strong>: From fund field mapping table (with configurable default)</li>
                                 <li><strong>Subanalysis</strong>: From fund field mapping table (with configurable default)</li>
-                                <li><strong>Supplier Number</strong>: From vendor mapping table (with configurable default)</li>
-                                <li><strong>Contract Number</strong>: From vendor mapping table (with configurable default)</li>
+                                <li><strong>Supplier Number</strong>: From vendor mapping table (no default - must be configured)</li>
+                                <li><strong>Contract Number</strong>: From vendor mapping table (no default - must be configured)</li>
                             </ul>
                             <p><strong>Note:</strong> Since Koha does not support additional fields for funds or vendors tables, these mappings are configured directly below via plugin configuration.</p>
                         </div>
@@ -140,16 +140,6 @@
                                 <label for="default_acquisitions_subanalysis">Default subanalysis code for acquisitions:</label>
                                 <input type="text" name="default_acquisitions_subanalysis" value="[% default_acquisitions_subanalysis || '5460' %]" maxlength="10" />
                                 <span class="hint">Used when no subanalysis mapping is found for a fund code</span>
-                            </li>
-                            <li>
-                                <label for="default_supplier_number">Default supplier number for unmapped vendors:</label>
-                                <input type="text" name="default_supplier_number" value="[% default_supplier_number %]" maxlength="10" />
-                                <span class="hint">Used when no specific mapping is found for a vendor</span>
-                            </li>
-                            <li>
-                                <label for="default_contract_number">Default contract number for unmapped vendors:</label>
-                                <input type="text" name="default_contract_number" value="[% default_contract_number %]" maxlength="10" />
-                                <span class="hint">Used when no specific mapping is found for a vendor</span>
                             </li>
                         </ol>
 
@@ -203,7 +193,7 @@
                         [% END %]
 
                         <h4>Vendor Field Mappings</h4>
-                        <div class="hint">Map vendors to their corresponding Oracle supplier numbers and contract numbers. Empty values will use the defaults above.</div>
+                        <div class="hint">Map vendors to their corresponding Oracle supplier numbers and contract numbers. All vendors must be mapped - there are no defaults.</div>
                         [% IF vendors.count %]
                         <table class="table table-striped">
                             <thead>

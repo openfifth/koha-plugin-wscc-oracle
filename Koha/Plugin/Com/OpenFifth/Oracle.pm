@@ -394,83 +394,8 @@ sub api_namespace {
 sub api_routes {
     my ( $self, $args ) = @_;
 
-    my $spec = {
-        "/upload" => {
-            "post" => {
-                "x-mojo-to" =>
-                  "Com::OpenFifth::Oracle::UploadController#upload",
-                "operationId" => "OracleUpload",
-                "tags"        => ["oracle"],
-                "parameters"  => [
-                    {
-                        "name"        => "from",
-                        "in"          => "formData",
-                        "description" => "Start date for report",
-                        "required"    => \1,
-                        "type"        => "string"
-                    },
-                    {
-                        "name"        => "to",
-                        "in"          => "formData",
-                        "description" => "End date for report",
-                        "required"    => \1,
-                        "type"        => "string"
-                    },
-                    {
-                        "name"        => "type",
-                        "in"          => "formData",
-                        "description" => "Report type (income or invoices)",
-                        "required"    => \1,
-                        "type"        => "string"
-                    }
-                ],
-                "produces"  => ["application/json"],
-                "responses" => {
-                    "200" => {
-                        "description" => "Upload successful",
-                        "schema"      => {
-                            "type"       => "object",
-                            "properties" => {
-                                "success" => {
-                                    "description" => "Success status",
-                                    "type"        => "boolean"
-                                },
-                                "message" => {
-                                    "description" => "Success message",
-                                    "type"        => "string"
-                                },
-                                "filename" => {
-                                    "description" => "Generated filename",
-                                    "type"        => "string"
-                                }
-                            }
-                        }
-                    },
-                    "400" => {
-                        "description" => "Upload failed",
-                        "schema"      => {
-                            "type"       => "object",
-                            "properties" => {
-                                "success" => {
-                                    "description" => "Success status",
-                                    "type"        => "boolean"
-                                },
-                                "message" => {
-                                    "description" => "Error message",
-                                    "type"        => "string"
-                                }
-                            }
-                        }
-                    }
-                },
-                "x-koha-authorization" => {
-                    "permissions" => {
-                        "plugins" => "1"
-                    }
-                }
-            }
-        }
-    };
+    my $spec_str = $self->mbf_read('openapi.json');
+    my $spec     = decode_json($spec_str);
 
     return $spec;
 }

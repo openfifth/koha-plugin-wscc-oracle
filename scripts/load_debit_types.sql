@@ -3,14 +3,14 @@
 
 -- First, create additional fields for the extra data from CSV
 INSERT INTO additional_fields (tablename, name, authorised_value_category, marcfield, marcfield_mode, searchable, repeatable) VALUES
-('account_debit_types', 'Extra Code', '', '', 'get', 1, 0),
+('account_debit_types', 'Cost Centre', '', '', 'get', 1, 0),
 ('account_debit_types', 'Subanalysis', '', '', 'get', 1, 0),
 ('account_debit_types', 'VAT Code', '', '', 'get', 1, 0)
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- Create a temporary table to hold the parsed CSV data
 CREATE TEMPORARY TABLE temp_debit_types (
-    extra_code VARCHAR(20),
+    cost_centre VARCHAR(20),
     income_code VARCHAR(20),
     finance_code VARCHAR(80),
     description VARCHAR(500),
@@ -22,7 +22,7 @@ CREATE TEMPORARY TABLE temp_debit_types (
 -- Insert the CSV data manually (since we can't easily load CSV in this context)
 -- Note: Prices have been cleaned and converted to decimal format
 
-INSERT INTO temp_debit_types (extra_code, income_code, finance_code, description, cost_text, vat_code, cost_amount) VALUES
+INSERT INTO temp_debit_types (cost_centre, income_code, finance_code, description, cost_text, vat_code, cost_amount) VALUES
 ('', '8623', 'CREDIT', 'Borrower Account Credit', '', 'O', NULL),
 ('', '8623', 'ELECTPRT', 'Computer Printing', '£ -', 'S', NULL),
 ('', '8623', 'OVUNDER', 'Deficit/Surplus', '', 'O', NULL),
@@ -186,20 +186,20 @@ WHERE finance_code NOT IN (SELECT code COLLATE utf8mb4_general_ci FROM account_d
 ORDER BY finance_code;
 
 -- Get the additional field IDs we just created
-SET @extra_code_field_id = (SELECT id FROM additional_fields WHERE tablename = 'account_debit_types' AND name = 'Extra Code');
+SET @cost_centre_field_id = (SELECT id FROM additional_fields WHERE tablename = 'account_debit_types' AND name = 'Cost Centre');
 SET @subanalysis_field_id = (SELECT id FROM additional_fields WHERE tablename = 'account_debit_types' AND name = 'Subanalysis');
 SET @vat_code_field_id = (SELECT id FROM additional_fields WHERE tablename = 'account_debit_types' AND name = 'VAT Code');
 
--- Insert additional field values for extra_code (where not empty)
+-- Insert additional field values for cost_centre (where not empty)
 INSERT INTO additional_field_values (field_id, record_id, value)
 SELECT DISTINCT
-    @extra_code_field_id,
+    @cost_centre_field_id,
     finance_code,
-    extra_code
+    cost_centre
 FROM temp_debit_types
-WHERE extra_code != '' AND extra_code IS NOT NULL
+WHERE cost_centre != '' AND cost_centre IS NOT NULL
   AND finance_code NOT IN (
-    SELECT record_id COLLATE utf8mb4_general_ci FROM additional_field_values WHERE field_id = @extra_code_field_id
+    SELECT record_id COLLATE utf8mb4_general_ci FROM additional_field_values WHERE field_id = @cost_centre_field_id
   );
 
 -- Insert additional field values for subanalysis (from income_code column in CSV)
@@ -242,7 +242,7 @@ SELECT
     dt.can_be_sold,
     (SELECT value FROM additional_field_values afv
      JOIN additional_fields af ON afv.field_id = af.id
-     WHERE af.name = 'Extra Code' AND afv.record_id = dt.code LIMIT 1) as extra_code,
+     WHERE af.name = 'Cost Centre' AND afv.record_id = dt.code LIMIT 1) as cost_centre,
     (SELECT value FROM additional_field_values afv
      JOIN additional_fields af ON afv.field_id = af.id
      WHERE af.name = 'Subanalysis' AND afv.record_id = dt.code LIMIT 1) as subanalysis,

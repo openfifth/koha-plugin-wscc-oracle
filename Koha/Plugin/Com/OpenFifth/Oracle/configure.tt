@@ -244,7 +244,7 @@
                                 <li><strong>VAT Code</strong>: VAT classification codes (S, Z, E, O)</li>
                                 <li><strong>Subanalysis</strong>: Subanalysis code for income transactions</li>
                                 <li><strong>Subjective</strong>: Subjective code for income transactions</li>
-                                <li><strong>Extra Code</strong>: Additional codes as needed for future requirements</li>
+                                <li><strong>Cost Centre</strong>: Optional debit type-level cost centre override</li>
                             </ul>
 
                             <h6>For Library Branches (<code>branches</code> table)</h6>

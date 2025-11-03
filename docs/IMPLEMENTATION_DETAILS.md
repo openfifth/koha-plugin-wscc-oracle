@@ -26,7 +26,7 @@ use Koha::AdditionalFieldValues;
 #### `_get_debit_type_additional_fields($debit_type_code)`
 
 - Uses `Koha::AdditionalFields->search()` and `Koha::AdditionalFieldValues->search()`
-- Retrieves Title Case field names: `VAT Code`, `Subjective`, `Subanalysis`, `Extra Code`
+- Retrieves Title Case field names: `VAT Code`, `Subjective`, `Subanalysis`, `Cost Centre`
 - Implements caching to avoid repeated database queries
 - Returns defaults from plugin configuration or hardcoded fallbacks
 
@@ -97,7 +97,7 @@ INSERT INTO additional_fields (tablename, name, ...) VALUES
 ('account_debit_types', 'VAT Code', ...),
 ('account_debit_types', 'Subjective', ...),
 ('account_debit_types', 'Subanalysis', ...),
-('account_debit_types', 'Extra Code', ...);
+('account_debit_types', 'Cost Centre', ...);
 ```
 
 ### Additional Fields for branches
@@ -199,7 +199,7 @@ Store transaction-type specific codes using additional fields on `account_debit_
 - `VAT Code` - VAT classification (S, Z, E, O)
 - `Subjective` - Subjective code (841800, etc.)
 - `Subanalysis` - Subanalysis code (8089, etc.)
-- `Extra Code` - Additional codes for future requirements
+- `Cost Centre` - Optional debit type-level cost centre override (replaces branch-level when present)
 
 #### 3. Income Report Field Mapping
 

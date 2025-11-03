@@ -1,6 +1,6 @@
 -- Setup script for additional fields required by WSCC Oracle Finance Plugin
 -- This script creates the necessary additional field definitions for:
--- 1. account_debit_types table (VAT Code, Extra Code, Subjective, Subanalysis)
+-- 1. account_debit_types table (VAT Code, Subjective, Subanalysis, Cost Centre)
 -- 2. branches table (Income Objective, Income Cost Centre, Acquisitions Cost Centre)
 
 -- NOTE: Run this script against your Koha database to enable dynamic configuration
@@ -17,12 +17,12 @@ ON DUPLICATE KEY UPDATE
     tablename = 'account_debit_types',
     name = 'VAT Code';
 
--- Insert additional field for Extra code
+-- Insert additional field for Cost Centre code (debit type level override)
 INSERT INTO additional_fields (tablename, name, authorised_value_category, marcfield, searchable)
-VALUES ('account_debit_types', 'Extra Code', NULL, '', 0)
+VALUES ('account_debit_types', 'Cost Centre', NULL, '', 0)
 ON DUPLICATE KEY UPDATE
     tablename = 'account_debit_types',
-    name = 'Extra Code';
+    name = 'Cost Centre';
 
 -- Insert additional field for Subjective code
 INSERT INTO additional_fields (tablename, name, authorised_value_category, marcfield, searchable)

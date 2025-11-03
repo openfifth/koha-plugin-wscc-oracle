@@ -964,7 +964,7 @@ sub _get_debit_type_additional_fields {
     my $additional_fields = Koha::AdditionalFields->search(
         {
             tablename => 'account_debit_types',
-            name => [ 'VAT Code', 'Extra Code', 'Subjective', 'Subanalysis', 'Cost Centre' ]
+            name => [ 'VAT Code', 'Subjective', 'Subanalysis', 'Cost Centre' ]
         }
     );
 
@@ -986,7 +986,6 @@ sub _get_debit_type_additional_fields {
 
     # Set defaults if not found in database (from plugin configuration)
     $fields->{'VAT Code'}    //= $self->retrieve_data('default_vat_code');
-    $fields->{'Extra Code'}  //= '';    # Always default to empty
     $fields->{'Subjective'}  //= $self->retrieve_data('default_subjective');
     $fields->{'Subanalysis'} //= $self->retrieve_data('default_subanalysis');
 

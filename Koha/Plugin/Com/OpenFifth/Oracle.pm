@@ -468,16 +468,15 @@ sub _generate_invoices_report {
             while ( my $line = $orders->next ) {
                 $line_count++;
 
-                # Unit price
+                # Unit price (format as x.xx)
                 my $unitprice =
-                  Koha::Number::Price->new( $line->unitprice )->round * 100;
+                  sprintf( "%.2f", Koha::Number::Price->new( $line->unitprice )->round );
                 my $quantity = $line->quantity || 1;
                 $invoice_total += ( $unitprice * $quantity );
 
-                # Tax
+                # Tax (format as x.xx)
                 my $tax_value_on_receiving =
-                  Koha::Number::Price->new( $line->tax_value_on_receiving )
-                  ->round * 100;
+                  sprintf( "%.2f", Koha::Number::Price->new( $line->tax_value_on_receiving )->round );
                 my $tax_rate_on_receiving = $line->tax_rate_on_receiving * 100;
                 my $tax_code =
                     $tax_rate_on_receiving == 20 ? 'STANDARD'
@@ -527,8 +526,8 @@ sub _generate_invoices_report {
             my $contract_number =
               $self->_get_vendor_contract_number($vendor_id);
 
-            # Make invoice total negative for AP
-            $invoice_total *= -1;
+            # Make invoice total negative for AP and format as x.xx
+            $invoice_total = sprintf( "%.2f", $invoice_total * -1 );
 
             # Build header record with new format (15 fields)
             # Header record: INVOICE_NUMBER, INVOICE_TOTAL,
@@ -734,7 +733,7 @@ sub _generate_income_report {
             debit_type_code => undef,         # Only credits
             amount          => { '<', 0 },    # Negative amounts (credits)
             description     =>
-              { 'NOT LIKE' => '%Pay360%' }    # FIXME: Exclude Pay360 payments
+              { 'NOT LIKE' => '%Pay360%' }    # Exclude Pay360 payments
         }
     );
 
@@ -790,9 +789,9 @@ sub _generate_income_report {
         while ( my $row = $income_summary->next ) {
             my $amount =
               $row->get_column('total_amount') * -1;   # Reverse sign for income
-            my $amount_pence = int( $amount * 100 );   # Convert to pence
+            my $amount_formatted = sprintf( "%.2f", $amount );   # Format as x.xx
 
-            next if $amount_pence <= 0;    # Skip zero or negative amounts
+            next if $amount <= 0;    # Skip zero or negative amounts
 
             my $credit_branch =
               $row->get_column('credit_branchcode') || 'UNKNOWN';
@@ -856,7 +855,7 @@ sub _generate_income_report {
                     $doc_description,    # 2. D_Document Description
                     $accounting_date,    # 3. D_Document Date
                     1,                   # 4. D_Line Number
-                    $amount_pence,       # 5. D_Line Amount (positive, in pence)
+                    $amount_formatted,   # 5. D_Line Amount (positive, in pounds.pence)
                     $cost_centre,        # 6. D_Cost Centre
                     $objective,          # 7. D_Objective
                     $subjective,         # 8. D_Subjective
@@ -1021,11 +1020,11 @@ sub _calculate_vat_amount {
     my ( $self, $amount, $vat_code ) = @_;
 
     # Only calculate VAT for STANDARD rate items
-    return 0 unless $vat_code eq 'STANDARD';
+    return sprintf( "%.2f", 0 ) unless $vat_code eq 'STANDARD';
 
     # Standard VAT rate is 20%
     my $vat_amount = $amount / 1.20;
-    return int( $vat_amount * 100 );    # Convert to pence
+    return sprintf( "%.2f", $vat_amount );    # Format as x.xx
 }
 
 1;

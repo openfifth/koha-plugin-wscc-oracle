@@ -468,15 +468,13 @@ sub _generate_invoices_report {
             while ( my $line = $orders->next ) {
                 $line_count++;
 
-                # Unit price (format as x.xx)
-                my $unitprice =
-                  sprintf( "%.2f", Koha::Number::Price->new( $line->unitprice )->round );
+                # Unit price - keep as numeric for calculation
+                my $unitprice = Koha::Number::Price->new( $line->unitprice )->round;
                 my $quantity = $line->quantity || 1;
                 $invoice_total += ( $unitprice * $quantity );
 
-                # Tax (format as x.xx)
-                my $tax_value_on_receiving =
-                  sprintf( "%.2f", Koha::Number::Price->new( $line->tax_value_on_receiving )->round );
+                # Tax - keep as numeric for calculation
+                my $tax_value_on_receiving = Koha::Number::Price->new( $line->tax_value_on_receiving )->round;
                 my $tax_rate_on_receiving = $line->tax_rate_on_receiving * 100;
                 my $tax_code =
                     $tax_rate_on_receiving == 20 ? 'STANDARD'
@@ -494,6 +492,7 @@ sub _generate_invoices_report {
 
                 # Line record: INVOICE_NUMBER, then empty fields for header
                 # data, then line-specific data
+                # Line amounts are positive (matching header convention)
                 for my $qty_unit ( 1 .. $quantity ) {
                     push @orderlines, [
                         $invoice->invoicenumber,    # INVOICE_NUMBER
@@ -502,8 +501,8 @@ sub _generate_invoices_report {
                         "",            # SUPPLIER_NUMBER (empty for line)
                         "",            # CONTRACT_NUMBER (empty for line)
                         "",            # SHIPMENT_DATE (empty for line)
-                        $unitprice,    # LINE_AMOUNT
-                        $tax_value_on_receiving,    # TAX_AMOUNT
+                        sprintf( "%.2f", $unitprice ),    # LINE_AMOUNT (positive)
+                        sprintf( "%.2f", $tax_value_on_receiving ),    # TAX_AMOUNT (positive)
                         $tax_code,                  # TAX_CODE
                         $description,               # DESCRIPTION
                         $self->_get_acquisitions_costcenter($budget_code)
@@ -526,8 +525,8 @@ sub _generate_invoices_report {
             my $contract_number =
               $self->_get_vendor_contract_number($vendor_id);
 
-            # Make invoice total negative for AP and format as x.xx
-            $invoice_total = sprintf( "%.2f", $invoice_total * -1 );
+            # Format invoice total as positive for header record
+            $invoice_total = sprintf( "%.2f", $invoice_total );
 
             # Build header record with new format (15 fields)
             # Header record: INVOICE_NUMBER, INVOICE_TOTAL,

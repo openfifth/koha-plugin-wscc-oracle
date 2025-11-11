@@ -826,7 +826,9 @@ sub _generate_income_report {
             # Use debit type cost centre if available, otherwise fall back to branch
             my $cost_centre = $debit_fields->{'Cost Centre'}
               || $credit_branch_fields->{'Income Cost Centre'};
-            my $objective   = $credit_branch_fields->{'Income Objective'};
+            # Use debit type objective if available, otherwise fall back to branch
+            my $objective = $debit_fields->{'Objective'}
+              || $credit_branch_fields->{'Income Objective'};
             my $subjective  = $debit_fields->{'Subjective'};
             my $subanalysis = $debit_fields->{'Subanalysis'};
 
@@ -964,7 +966,7 @@ sub _get_debit_type_additional_fields {
     my $additional_fields = Koha::AdditionalFields->search(
         {
             tablename => 'account_debit_types',
-            name => [ 'VAT Code', 'Subjective', 'Subanalysis', 'Cost Centre' ]
+            name => [ 'VAT Code', 'Subjective', 'Subanalysis', 'Cost Centre', 'Objective' ]
         }
     );
 

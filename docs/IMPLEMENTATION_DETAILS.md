@@ -26,7 +26,7 @@ use Koha::AdditionalFieldValues;
 #### `_get_debit_type_additional_fields($debit_type_code)`
 
 - Uses `Koha::AdditionalFields->search()` and `Koha::AdditionalFieldValues->search()`
-- Retrieves Title Case field names: `VAT Code`, `Subjective`, `Subanalysis`, `Cost Centre`
+- Retrieves Title Case field names: `VAT Code`, `Subjective`, `Subanalysis`, `Cost Centre`, `Objective`
 - Implements caching to avoid repeated database queries
 - Returns defaults from plugin configuration or hardcoded fallbacks
 
@@ -207,8 +207,8 @@ The income report CSV requires 16 fields per transaction. Current field mapping:
 
 | CSV Field                 | Source               | Implementation                                      |
 | ------------------------- | -------------------- | --------------------------------------------------- |
-| D_Cost Centre (6)         | Credit Branch        | `Income Cost Centre` additional field (default: RN03) |
-| D_Objective (7)           | Credit Branch        | `Income Objective` additional field (default: CUL074) |
+| D_Cost Centre (6)         | Debit Type / Credit Branch | `Cost Centre` (debit type) OR `Income Cost Centre` (branch, default: RN03) |
+| D_Objective (7)           | Debit Type / Credit Branch | `Objective` (debit type) OR `Income Objective` (branch, default: CUL074) |
 | D_Subjective (8)          | Debit Type           | `Subjective` additional field (default: 841800)     |
 | D_Subanalysis (9)         | Debit Type           | `Subanalysis` additional field (default: 8089)      |
 | D_Cost Centre Offset (10) | Plugin Configuration | Configurable (default: 'RZ00' - Libraries Income Suspense) |
@@ -216,7 +216,7 @@ The income report CSV requires 16 fields per transaction. Current field mapping:
 | D_Subjective Offset (12)  | Plugin Configuration | Configurable (default: '810400' - Other Income)     |
 | D_Subanalysis Offset (13) | Plugin Configuration | Configurable (default: '8201')                      |
 
-**Note:** Income report aggregates by both credit branch (payment location) and debit branch (charge origin). Credit branch provides Cost Centre and Objective for main fields, while debit branch provides Objective for the offset field. This ensures proper accounting of where funds were collected vs. where charges originated.
+**Note:** Income report aggregates by both credit branch (payment location) and debit branch (charge origin). Cost Centre and Objective for main fields use debit type-level overrides if configured, otherwise fall back to credit branch values. Debit branch provides Objective for the offset field. This ensures proper accounting of where funds were collected vs. where charges originated, with granular control at the transaction type level.
 
 #### 4. Configurable Defaults System
 

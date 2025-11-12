@@ -19,14 +19,14 @@ use Mojo::JSON qw{ decode_json encode_json };
 use Text::CSV  qw( csv );
 use C4::Context;
 
-our $VERSION = '0.2.5';
+our $VERSION = '0.2.6';
 
 our $metadata = {
     name => 'Oracle Finance Integration',
 
     author          => 'Open Fifth',
     date_authored   => '2025-04-24',
-    date_updated    => '2025-11-11',
+    date_updated    => '2025-11-12',
     minimum_version => '24.11.00.000',
     maximum_version => '25.05.00.000',
     version         => $VERSION,

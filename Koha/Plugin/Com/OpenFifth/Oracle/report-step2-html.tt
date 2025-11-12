@@ -179,11 +179,49 @@ $(document).ready(function() {
                     alert('Success: ' + response.message);
                 } else {
                     // Show error message
-                    alert('Error: ' + response.message);
+                    var errorMsg = 'Error: ' + response.message;
+                    if (response.error_detail) {
+                        errorMsg += '\n\nDetails:';
+                        if (response.error_detail.operation) {
+                            errorMsg += '\nOperation: ' + response.error_detail.operation;
+                        }
+                        if (response.error_detail.path) {
+                            errorMsg += '\nPath: ' + response.error_detail.path;
+                        }
+                        if (response.error_detail.status_code) {
+                            errorMsg += '\nStatus Code: ' + response.error_detail.status_code;
+                        }
+                        if (response.error_detail.error_raw) {
+                            errorMsg += '\nTechnical Details: ' + response.error_detail.error_raw;
+                        }
+                    }
+                    alert(errorMsg);
                 }
             },
             error: function(xhr, status, error) {
-                alert('Error uploading file: ' + error);
+                var errorMsg = 'Error uploading file: ' + error;
+                if (xhr.responseJSON) {
+                    errorMsg = 'Error: ' + xhr.responseJSON.message;
+                    if (xhr.responseJSON.error_detail) {
+                        errorMsg += '\n\nDetails:';
+                        var detail = xhr.responseJSON.error_detail;
+                        if (detail.operation) {
+                            errorMsg += '\nOperation: ' + detail.operation;
+                        }
+                        if (detail.path) {
+                            errorMsg += '\nPath: ' + detail.path;
+                        }
+                        if (detail.status_code) {
+                            errorMsg += '\nStatus Code: ' + detail.status_code;
+                        }
+                        if (detail.error_raw) {
+                            errorMsg += '\nTechnical Details: ' + detail.error_raw;
+                        }
+                    }
+                } else if (xhr.responseText) {
+                    errorMsg += '\nResponse: ' + xhr.responseText;
+                }
+                alert(errorMsg);
             },
             complete: function() {
                 // Re-enable button and restore original text

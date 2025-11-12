@@ -93,6 +93,32 @@
               "message": {
                 "description": "Error message",
                 "type": "string"
+              },
+              "error_detail": {
+                "description": "Detailed error information from SFTP transport",
+                "type": "object",
+                "properties": {
+                  "operation": {
+                    "description": "Operation that failed (connection, upload, etc.)",
+                    "type": "string"
+                  },
+                  "message": {
+                    "description": "SFTP error message",
+                    "type": "string"
+                  },
+                  "status_code": {
+                    "description": "SFTP status code",
+                    "type": "integer"
+                  },
+                  "path": {
+                    "description": "Remote path where operation failed",
+                    "type": "string"
+                  },
+                  "error_raw": {
+                    "description": "Raw STDERR output from SSH/SFTP",
+                    "type": "string"
+                  }
+                }
               }
             }
           }

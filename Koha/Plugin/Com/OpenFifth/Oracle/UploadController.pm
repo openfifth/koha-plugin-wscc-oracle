@@ -6,6 +6,7 @@ use Mojo::Base 'Mojolicious::Controller';
 use Koha::DateUtils qw( dt_from_string );
 use Koha::File::Transports;
 use File::Spec;
+use JSON qw( decode_json );
 
 =head1 API
 
@@ -100,7 +101,19 @@ sub upload {
 
         # Upload to SFTP
         eval {
-            $transport->connect;
+            my $connect_result = $transport->connect;
+            unless ($connect_result) {
+                my $error_detail = $self->_extract_transport_error($transport, 'connection');
+                return $c->render(
+                    status => 502,
+                    openapi => {
+                        success => Mojo::JSON->false,
+                        message => "SFTP connection failed: " . $error_detail->{message},
+                        error_detail => $error_detail
+                    }
+                );
+            }
+
             open my $fh, '<', \$report;
             my $upload_result = $transport->upload_file( $fh, $upload_path );
             close $fh;
@@ -115,11 +128,13 @@ sub upload {
                     }
                 );
             } else {
+                my $error_detail = $self->_extract_transport_error($transport, 'upload');
                 return $c->render(
                     status => 502,
                     openapi => {
                         success => Mojo::JSON->false,
-                        message => "Failed to upload file to SFTP server"
+                        message => "SFTP upload failed: " . $error_detail->{message},
+                        error_detail => $error_detail
                     }
                 );
             }
@@ -130,7 +145,7 @@ sub upload {
                 status => 502,
                 openapi => {
                     success => Mojo::JSON->false,
-                    message => "SFTP upload error: $@"
+                    message => "SFTP upload exception: $@"
                 }
             );
         }
@@ -176,6 +191,60 @@ sub upload {
             );
         }
     }
+}
+
+=head3 _extract_transport_error
+
+Helper method to extract detailed error information from a transport object
+
+=cut
+
+sub _extract_transport_error {
+    my ( $self, $transport, $operation ) = @_;
+
+    my $error_detail = {
+        operation => $operation,
+        message   => 'Unknown error'
+    };
+
+    # Extract error from transport status field
+    if ( my $status_json = $transport->status ) {
+        eval {
+            my $status = decode_json($status_json);
+            if ( $status->{operations} && ref $status->{operations} eq 'ARRAY' ) {
+                # Find the most recent error operation
+                for my $op ( reverse @{ $status->{operations} } ) {
+                    if ( $op->{status} eq 'error' && $op->{detail} ) {
+                        $error_detail->{message}     = $op->{detail}->{error} || 'Unknown error';
+                        $error_detail->{status_code} = $op->{detail}->{status};
+                        $error_detail->{path}        = $op->{detail}->{path};
+                        $error_detail->{error_raw}   = $op->{detail}->{error_raw};
+                        $error_detail->{operation}   = $op->{code} if $op->{code};
+                        last;
+                    }
+                }
+            }
+        };
+    }
+
+    # Extract error from object messages (in-memory, more immediate)
+    if ( my $messages = $transport->object_messages ) {
+        for my $msg ( reverse @{$messages} ) {
+            if ( $msg->type eq 'error' ) {
+                my $payload = $msg->payload;
+                if ($payload) {
+                    $error_detail->{message}     = $payload->{error} || $error_detail->{message};
+                    $error_detail->{status_code} = $payload->{status};
+                    $error_detail->{path}        = $payload->{path};
+                    $error_detail->{error_raw}   = $payload->{error_raw};
+                }
+                $error_detail->{operation} = $msg->message if $msg->message;
+                last;
+            }
+        }
+    }
+
+    return $error_detail;
 }
 
 1;

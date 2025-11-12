@@ -215,11 +215,24 @@ sub _extract_transport_error {
                 # Find the most recent error operation
                 for my $op ( reverse @{ $status->{operations} } ) {
                     if ( $op->{status} eq 'error' && $op->{detail} ) {
-                        $error_detail->{message}     = $op->{detail}->{error} || 'Unknown error';
-                        $error_detail->{status_code} = $op->{detail}->{status};
-                        $error_detail->{path}        = $op->{detail}->{path};
-                        $error_detail->{error_raw}   = $op->{detail}->{error_raw};
-                        $error_detail->{operation}   = $op->{code} if $op->{code};
+                        $error_detail->{message} = $op->{detail}->{error} || 'Unknown error';
+
+                        # Only include status_code if it's defined and numeric
+                        if ( defined $op->{detail}->{status} && $op->{detail}->{status} =~ /^\d+$/ ) {
+                            $error_detail->{status_code} = int( $op->{detail}->{status} );
+                        }
+
+                        # Only include path if it's defined and non-empty
+                        if ( defined $op->{detail}->{path} && $op->{detail}->{path} ne '' ) {
+                            $error_detail->{path} = $op->{detail}->{path};
+                        }
+
+                        # Only include error_raw if defined and non-empty
+                        if ( defined $op->{detail}->{error_raw} && $op->{detail}->{error_raw} ne '' ) {
+                            $error_detail->{error_raw} = $op->{detail}->{error_raw};
+                        }
+
+                        $error_detail->{operation} = $op->{code} if $op->{code};
                         last;
                     }
                 }
@@ -233,10 +246,22 @@ sub _extract_transport_error {
             if ( $msg->type eq 'error' ) {
                 my $payload = $msg->payload;
                 if ($payload) {
-                    $error_detail->{message}     = $payload->{error} || $error_detail->{message};
-                    $error_detail->{status_code} = $payload->{status};
-                    $error_detail->{path}        = $payload->{path};
-                    $error_detail->{error_raw}   = $payload->{error_raw};
+                    $error_detail->{message} = $payload->{error} || $error_detail->{message};
+
+                    # Only include status_code if it's defined and numeric
+                    if ( defined $payload->{status} && $payload->{status} =~ /^\d+$/ ) {
+                        $error_detail->{status_code} = int( $payload->{status} );
+                    }
+
+                    # Only include path if it's defined and non-empty
+                    if ( defined $payload->{path} && $payload->{path} ne '' ) {
+                        $error_detail->{path} = $payload->{path};
+                    }
+
+                    # Only include error_raw if defined and non-empty
+                    if ( defined $payload->{error_raw} && $payload->{error_raw} ne '' ) {
+                        $error_detail->{error_raw} = $payload->{error_raw};
+                    }
                 }
                 $error_detail->{operation} = $msg->message if $msg->message;
                 last;

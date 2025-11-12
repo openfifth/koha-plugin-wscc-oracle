@@ -786,11 +786,10 @@ sub _generate_income_report {
 
         # Process the offset-based aggregated data
         while ( my $row = $income_summary->next ) {
-            my $amount =
+            my $inclusive_amount =
               $row->get_column('total_amount') * -1;   # Reverse sign for income
-            my $amount_formatted = sprintf( "%.2f", $amount );   # Format as x.xx
 
-            next if $amount <= 0;    # Skip zero or negative amounts
+            next if $inclusive_amount <= 0;    # Skip zero or negative amounts
 
             my $credit_branch =
               $row->get_column('credit_branchcode') || 'UNKNOWN';
@@ -842,9 +841,10 @@ sub _generate_income_report {
             my $subanalysis_offset =
               $self->retrieve_data('default_income_subanalysis_offset');
 
-            # Get VAT information using new codes
-            my $vat_code   = $self->_get_debit_type_vat_code($debit_type);
-            my $vat_amount = $self->_calculate_vat_amount( $amount, $vat_code );
+            # Get VAT information and calculate exclusive/VAT split
+            my $vat_code = $self->_get_debit_type_vat_code($debit_type);
+            my ( $exclusive_amount, $vat_amount ) =
+              $self->_calculate_exclusive_and_vat( $inclusive_amount, $vat_code );
 
             # Create line description in format: "[Payment Type] [Item Type]"
             my $line_description = $payment_type . " " . $debit_type;
@@ -858,7 +858,7 @@ sub _generate_income_report {
                     $doc_description,    # 2. D_Document Description
                     $accounting_date,    # 3. D_Document Date
                     1,                   # 4. D_Line Number
-                    $amount_formatted,   # 5. D_Line Amount (positive, in pounds.pence)
+                    $exclusive_amount,   # 5. D_Line Amount (TAX EXCLUSIVE, in pounds.pence)
                     $cost_centre,        # 6. D_Cost Centre
                     $objective,          # 7. D_Objective
                     $subjective,         # 8. D_Subjective
@@ -869,7 +869,7 @@ sub _generate_income_report {
                     $subanalysis_offset, # 13. D_Subanalysis Offset
                     $line_description,   # 14. D_Line Description
                     $vat_code,           # 15. D_VAT Code
-                    $vat_amount          # 16. D_VAT Amount
+                    $vat_amount          # 16. D_VAT Amount (Oracle trusts this value)
                 ]
             );
 
@@ -1017,16 +1017,32 @@ sub _get_debit_type_vat_code {
 }
 
 # Given a VAT inclusive amount and a VAT Code
-# Return the VAT amount
-sub _calculate_vat_amount {
-    my ( $self, $amount, $vat_code ) = @_;
+# Return both the exclusive amount and VAT amount
+# Oracle will trust the VAT amount we provide (Field 16)
+sub _calculate_exclusive_and_vat {
+    my ( $self, $inclusive_amount, $vat_code ) = @_;
 
-    # Only calculate VAT for STANDARD rate items
-    return sprintf( "%.2f", 0 ) unless $vat_code eq 'STANDARD';
+    # For non-STANDARD rates, return full amount as exclusive with zero VAT
+    unless ( $vat_code eq 'STANDARD' ) {
+        return (
+            sprintf( "%.2f", $inclusive_amount ),    # Exclusive
+            sprintf( "%.2f", 0 )                     # VAT
+        );
+    }
 
     # Standard VAT rate is 20%
-    my $vat_amount = $amount / 1.20;
-    return sprintf( "%.2f", $vat_amount );    # Format as x.xx
+    # Calculate exclusive amount: inclusive / 1.20
+    my $exclusive_amount = $inclusive_amount / 1.20;
+
+    # Round exclusive to nearest penny (standard rounding)
+    $exclusive_amount = sprintf( "%.2f", $exclusive_amount );
+
+    # Calculate VAT as the difference to ensure exact total
+    # This guarantees: exclusive + VAT = inclusive (exactly)
+    my $vat_amount = $inclusive_amount - $exclusive_amount;
+    $vat_amount = sprintf( "%.2f", $vat_amount );
+
+    return ( $exclusive_amount, $vat_amount );
 }
 
 1;

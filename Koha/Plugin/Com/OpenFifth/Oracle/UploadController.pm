@@ -103,7 +103,7 @@ sub upload {
         eval {
             my $connect_result = $transport->connect;
             unless ($connect_result) {
-                my $error_detail = $self->_extract_transport_error($transport, 'connection');
+                my $error_detail = $c->_extract_transport_error($transport, 'connection');
                 return $c->render(
                     status => 502,
                     openapi => {
@@ -128,7 +128,7 @@ sub upload {
                     }
                 );
             } else {
-                my $error_detail = $self->_extract_transport_error($transport, 'upload');
+                my $error_detail = $c->_extract_transport_error($transport, 'upload');
                 return $c->render(
                     status => 502,
                     openapi => {

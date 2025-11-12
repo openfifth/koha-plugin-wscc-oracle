@@ -50,7 +50,55 @@
           }
         },
         "400": {
-          "description": "Upload failed",
+          "description": "Bad request - invalid input parameters",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "description": "Success status",
+                "type": "boolean"
+              },
+              "message": {
+                "description": "Error message",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "500": {
+          "description": "Internal server error - failed to generate report or save file",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "description": "Success status",
+                "type": "boolean"
+              },
+              "message": {
+                "description": "Error message",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "502": {
+          "description": "Bad gateway - SFTP upload failed",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "description": "Success status",
+                "type": "boolean"
+              },
+              "message": {
+                "description": "Error message",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "503": {
+          "description": "Service unavailable - SFTP transport not configured",
           "schema": {
             "type": "object",
             "properties": {

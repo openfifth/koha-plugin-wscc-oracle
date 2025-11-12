@@ -62,7 +62,7 @@ sub upload {
         my $transport = Koha::File::Transports->find( $plugin->retrieve_data('transport_server') );
         unless ($transport) {
             return $c->render(
-                status => 400,
+                status => 503,
                 openapi => {
                     success => Mojo::JSON->false,
                     message => "No SFTP transport configured"
@@ -76,7 +76,7 @@ sub upload {
 
         unless ($report) {
             return $c->render(
-                status => 400,
+                status => 500,
                 openapi => {
                     success => Mojo::JSON->false,
                     message => "Failed to generate report"
@@ -116,7 +116,7 @@ sub upload {
                 );
             } else {
                 return $c->render(
-                    status => 400,
+                    status => 502,
                     openapi => {
                         success => Mojo::JSON->false,
                         message => "Failed to upload file to SFTP server"
@@ -127,7 +127,7 @@ sub upload {
 
         if ($@) {
             return $c->render(
-                status => 400,
+                status => 502,
                 openapi => {
                     success => Mojo::JSON->false,
                     message => "SFTP upload error: $@"
@@ -141,7 +141,7 @@ sub upload {
 
         unless ($report) {
             return $c->render(
-                status => 400,
+                status => 500,
                 openapi => {
                     success => Mojo::JSON->false,
                     message => "Failed to generate report"
@@ -168,7 +168,7 @@ sub upload {
 
         if ($@) {
             return $c->render(
-                status => 400,
+                status => 500,
                 openapi => {
                     success => Mojo::JSON->false,
                     message => "Error saving file: $@"

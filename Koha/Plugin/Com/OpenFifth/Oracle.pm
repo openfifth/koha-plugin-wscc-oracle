@@ -471,10 +471,12 @@ sub _generate_invoices_report {
                 # Unit price - keep as numeric for calculation
                 my $unitprice = Koha::Number::Price->new( $line->unitprice )->round;
                 my $quantity = $line->quantity || 1;
-                $invoice_total += ( $unitprice * $quantity );
 
                 # Tax - keep as numeric for calculation
                 my $tax_value_on_receiving = Koha::Number::Price->new( $line->tax_value_on_receiving )->round;
+
+                # Invoice total includes both line amount and tax
+                $invoice_total += ( $unitprice * $quantity ) + ( $tax_value_on_receiving * $quantity );
                 my $tax_rate_on_receiving = $line->tax_rate_on_receiving * 100;
                 my $tax_code =
                     $tax_rate_on_receiving == 20 ? 'STANDARD'

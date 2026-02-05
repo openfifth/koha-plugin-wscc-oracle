@@ -12,6 +12,7 @@ use Koha::AdditionalFields;
 use Koha::AdditionalFieldValues;
 use Koha::Acquisition::Funds;
 use Koha::Acquisition::Booksellers;
+use Koha::Cash::Register::Cashups;
 
 use File::Spec;
 use List::Util qw(min max);
@@ -699,16 +700,16 @@ sub _generate_income_report {
 
     ( my $filename_no_ext = $filename ) =~ s/\.csv$//;
 
-    # Build date filtering conditions for cashup-style approach
-    my $dtf             = Koha::Database->new->schema->storage->datetime_parser;
-    my $date_conditions = {};
+    # Build date filtering conditions for cashup query
+    my $dtf = Koha::Database->new->schema->storage->datetime_parser;
+    my $cashup_conditions = {};
 
     if ( $startdate && $enddate ) {
         my $start_dt =
           $startdate->clone->set( hour => 0, minute => 0, second => 0 );
         my $end_dt =
           $enddate->clone->set( hour => 23, minute => 59, second => 59 );
-        $date_conditions->{'date'} = {
+        $cashup_conditions->{timestamp} = {
             '-between' => [
                 $dtf->format_datetime($start_dt),
                 $dtf->format_datetime($end_dt)
@@ -718,75 +719,90 @@ sub _generate_income_report {
     elsif ($startdate) {
         my $start_dt =
           $startdate->clone->set( hour => 0, minute => 0, second => 0 );
-        $date_conditions->{'date'} = { '>=', $dtf->format_datetime($start_dt) };
+        $cashup_conditions->{timestamp} =
+          { '>=', $dtf->format_datetime($start_dt) };
     }
     elsif ($enddate) {
         my $end_dt =
           $enddate->clone->set( hour => 23, minute => 59, second => 59 );
-        $date_conditions->{'date'} = { '<=', $dtf->format_datetime($end_dt) };
+        $cashup_conditions->{timestamp} =
+          { '<=', $dtf->format_datetime($end_dt) };
     }
 
-    # Find income transactions using cashup methodology
-    # Get credits (money received) excluding Pay360 payments
-    my $income_transactions = Koha::Account::Lines->search(
-        {
-            %{$date_conditions},
-            debit_type_code => undef,         # Only credits
-            amount          => { '<', 0 },    # Negative amounts (credits)
-            description     =>
-              { 'NOT LIKE' => '%Pay360%' }    # Exclude Pay360 payments
-        }
-    );
+    # Query all cashups within date range (across all registers)
+    my $cashups = Koha::Cash::Register::Cashups->search( $cashup_conditions,
+        { order_by => { '-asc' => [ 'timestamp', 'id' ] } } );
 
-    # Use offsets to get the breakdown like cashup does
-    my $income_summary = Koha::Account::Offsets->search(
-        {
-            'me.credit_id' => {
-                '-in' => $income_transactions->_resultset->get_column(
-                    'accountlines_id')->as_query
-            },
-            'me.debit_id' => { '!=' => undef }
-        },
-        {
-            join => [
-                { 'credit' => 'credit_type_code' },
-                { 'debit'  => 'debit_type_code' }
-            ],
-            group_by => [
-                'credit.branchcode',       'debit.branchcode',
-                'credit.credit_type_code', 'credit_type_code.description',
-                'debit.debit_type_code',   'debit_type_code.description',
-                'credit.payment_type', { 'DATE' => 'credit.date' }
-            ],
-            'select' => [
-                { sum => 'me.amount' },         'credit.branchcode',
-                'debit.branchcode',             'credit.credit_type_code',
-                'credit_type_code.description', 'debit.debit_type_code',
-                'debit_type_code.description',  'credit.payment_type',
-                { 'DATE' => 'credit.date' }
-            ],
-            'as' => [
-                'total_amount',       'credit_branchcode',
-                'debit_branchcode',   'credit_type_code',
-                'credit_description', 'debit_type_code',
-                'debit_description',  'payment_type',
-                'transaction_date'
-            ],
-            order_by => [
-                { '-desc' => 'credit.date' }, 'credit.branchcode',
-                'credit.credit_type_code',    'debit.debit_type_code'
-            ]
-        }
-    );
+    # Early return if no cashups found
+    return undef unless $cashups->count;
 
-    my $results;
+    my $results     = "";
     my $line_number = 1;
 
-    if ( $income_summary->count ) {
-        $results = "";
-        open my $fh, '>', \$results or die "Could not open scalar ref: $!";
+    open my $fh, '>', \$results or die "Could not open scalar ref: $!";
 
-        # Process the offset-based aggregated data
+    # Process each cashup session
+    while ( my $cashup = $cashups->next ) {
+
+        # Get accountlines for this cashup session
+        my $session_accountlines = $cashup->accountlines();
+
+       # Filter for income transactions (credits only, excluding reconciliation)
+        my $income_transactions = $session_accountlines->search(
+            {
+                debit_type_code  => undef,                        # Only credits
+                credit_type_code => { '!=' => 'CASHUP_SURPLUS' }
+                ,    # Exclude reconciliation
+                amount      => { '<', 0 },    # Negative amounts (credits)
+                description => { 'NOT LIKE' => '%Pay360%' }    # Exclude Pay360
+            }
+        );
+
+        # Skip if no income transactions in this session
+        next unless $income_transactions->count;
+
+     # Aggregate using offsets (same logic as before, but without DATE grouping)
+        my $income_summary = Koha::Account::Offsets->search(
+            {
+                'me.credit_id' => {
+                    '-in' => $income_transactions->_resultset->get_column(
+                        'accountlines_id')->as_query
+                },
+                'me.debit_id' => { '!=' => undef }
+            },
+            {
+                join => [
+                    { 'credit' => 'credit_type_code' },
+                    { 'debit'  => 'debit_type_code' }
+                ],
+                group_by => [
+                    'credit.branchcode',       'debit.branchcode',
+                    'credit.credit_type_code', 'credit_type_code.description',
+                    'debit.debit_type_code',   'debit_type_code.description',
+                    'credit.payment_type'
+                ],
+                'select' => [
+                    { sum => 'me.amount' },         'credit.branchcode',
+                    'debit.branchcode',             'credit.credit_type_code',
+                    'credit_type_code.description', 'debit.debit_type_code',
+                    'debit_type_code.description',  'credit.payment_type'
+                ],
+                'as' => [
+                    'total_amount',       'credit_branchcode',
+                    'debit_branchcode',   'credit_type_code',
+                    'credit_description', 'debit_type_code',
+                    'debit_description',  'payment_type'
+                ]
+            }
+        );
+
+        # Get cashup metadata for document reference and description
+        my $register         = $cashup->register;
+        my $register_id      = $register->id;
+        my $cashup_id        = $cashup->id;
+        my $cashup_timestamp = dt_from_string( $cashup->timestamp );
+
+        # Process aggregated results for this cashup session
         while ( my $row = $income_summary->next ) {
             my $inclusive_amount =
               $row->get_column('total_amount') * -1;   # Reverse sign for income
@@ -800,19 +816,23 @@ sub _generate_income_report {
             my $credit_type  = $row->get_column('credit_type_code');
             my $debit_type   = $row->get_column('debit_type_code');
             my $payment_type = $row->get_column('payment_type') || 'UNKNOWN';
-            my $date         = $row->get_column('transaction_date');
 
-            # Generate document reference based on aggregation
+            # Generate document reference (sequential across all cashups)
             my $doc_reference = "AGG" . sprintf( "%06d", $line_number );
 
-            # Generate document description using new format
-            my $doc_description =
-                dt_from_string($date)->strftime('%b%d/%y') . "/"
-              . $credit_branch
-              . "-LIB-Income";
+            # Generate document description with cashup visibility
+            # Format: MonDD/YY/RegisterID(CashupID)-BranchCode-LIB-Income
+            my $doc_description = sprintf(
+                "%s/%s(%d)-%s-LIB-Income",
+                $cashup_timestamp->strftime('%b%d/%y'),    # MonDD/YY
+                $register_id,
+                $cashup_id,
+                $credit_branch
+            );
 
-            # Get accounting date in Oracle format
-            my $accounting_date = $self->_format_oracle_date($date);
+            # Use cashup timestamp as accounting date (Oracle format YYYY/MM/DD)
+            my $accounting_date =
+              $self->_format_oracle_date( $cashup->timestamp );
 
            # Get GL code mappings from branches and debit type additional fields
            # Credit branch = where payment was taken (for main fields)
@@ -824,10 +844,11 @@ sub _generate_income_report {
             my $debit_fields =
               $self->_get_debit_type_additional_fields($debit_type);
 
-            # Use debit type cost centre if available, otherwise fall back to branch
+        # Use debit type cost centre if available, otherwise fall back to branch
             my $cost_centre = $debit_fields->{'Cost Centre'}
               || $credit_branch_fields->{'Income Cost Centre'};
-            # Use debit type objective if available, otherwise fall back to branch
+
+          # Use debit type objective if available, otherwise fall back to branch
             my $objective = $debit_fields->{'Objective'}
               || $credit_branch_fields->{'Income Objective'};
             my $subjective  = $debit_fields->{'Subjective'};
@@ -846,40 +867,42 @@ sub _generate_income_report {
             # Get VAT information and calculate exclusive/VAT split
             my $vat_code = $self->_get_debit_type_vat_code($debit_type);
             my ( $exclusive_amount, $vat_amount ) =
-              $self->_calculate_exclusive_and_vat( $inclusive_amount, $vat_code );
+              $self->_calculate_exclusive_and_vat( $inclusive_amount,
+                $vat_code );
 
             # Create line description in format: "[Payment Type] [Item Type]"
             my $line_description = $payment_type . " " . $debit_type;
             $line_description =~ s/[|"]//g;   # Remove pipe and quote characters
 
-            # Build record according to new 19-field cash management spec
+            # Build record according to 16-field specification
             $csv->print(
                 $fh,
                 [
-                    $doc_reference,      # 1. D_Document Document Number
-                    $doc_description,    # 2. D_Document Description
-                    $accounting_date,    # 3. D_Document Date
-                    1,                   # 4. D_Line Number
-                    $exclusive_amount,   # 5. D_Line Amount (TAX EXCLUSIVE, in pounds.pence)
-                    $cost_centre,        # 6. D_Cost Centre
-                    $objective,          # 7. D_Objective
-                    $subjective,         # 8. D_Subjective
-                    $subanalysis,        # 9. D_Subanalysis
-                    $cost_centre_offset, # 10. D_Cost Centre Offset
-                    $objective_offset,   # 11. D_Objective Offset
-                    $subjective_offset,  # 12. D_Subjective Offset
-                    $subanalysis_offset, # 13. D_Subanalysis Offset
-                    $line_description,   # 14. D_Line Description
-                    $vat_code,           # 15. D_VAT Code
-                    $vat_amount          # 16. D_VAT Amount (Oracle trusts this value)
+                    $doc_reference,         # 1. D_Document Document Number
+                    $doc_description,       # 2. D_Document Description
+                    $accounting_date,       # 3. D_Document Date
+                    1,                      # 4. D_Line Number
+                    $exclusive_amount
+                    ,    # 5. D_Line Amount (TAX EXCLUSIVE, in pounds.pence)
+                    $cost_centre,           # 6. D_Cost Centre
+                    $objective,             # 7. D_Objective
+                    $subjective,            # 8. D_Subjective
+                    $subanalysis,           # 9. D_Subanalysis
+                    $cost_centre_offset,    # 10. D_Cost Centre Offset
+                    $objective_offset,      # 11. D_Objective Offset
+                    $subjective_offset,     # 12. D_Subjective Offset
+                    $subanalysis_offset,    # 13. D_Subanalysis Offset
+                    $line_description,      # 14. D_Line Description
+                    $vat_code,              # 15. D_VAT Code
+                    $vat_amount    # 16. D_VAT Amount (Oracle trusts this value)
                 ]
             );
 
             $line_number++;
         }
-
-        close $fh;
     }
+
+    close $fh;
 
     return $results;
 }

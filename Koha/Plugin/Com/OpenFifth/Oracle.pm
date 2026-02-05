@@ -823,7 +823,7 @@ sub _generate_income_report {
             # Generate document description with cashup visibility
             # Format: MonDD/YY/RegisterID(CashupID)-BranchCode-LIB-Income
             my $doc_description = sprintf(
-                "%s/%s(%d)-%s-LIB-Income",
+                "%s:%s(%d)-%s-LIB-Income",
                 $cashup_timestamp->strftime('%b%d/%y'),    # MonDD/YY
                 $register_id,
                 $cashup_id,

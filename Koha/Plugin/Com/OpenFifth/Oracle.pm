@@ -754,7 +754,12 @@ sub _generate_income_report {
                 credit_type_code => { '!=' => 'CASHUP_SURPLUS' }
                 ,    # Exclude reconciliation
                 amount      => { '<', 0 },    # Negative amounts (credits)
-                description => { 'NOT LIKE' => '%Pay360%' }    # Exclude Pay360
+                # BUG FIX: PURCHASE credits have NULL descriptions and were being excluded
+                # by 'NOT LIKE' filter (NULL comparisons return NULL, not TRUE in SQL)
+                -or => [
+                    description => undef,                         # Include NULL descriptions
+                    description => { 'NOT LIKE' => '%Pay360%' }   # Exclude Pay360
+                ]
             }
         );
 

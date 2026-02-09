@@ -684,8 +684,47 @@ sub _get_acquisitions_distribution {
 "$company-$costcenter-$objective-$subjective-$subanalysis-$spare1-$spare2";
 }
 
+# Apply temporary data fixes for upstream bugs not yet backported
+# These fixes correct missing branchcodes on various transaction types
+sub _apply_temporary_data_fixes {
+    my ($self) = @_;
+
+    my $dbh = C4::Context->dbh;
+
+    # FIX 1: SIP payments missing branchcode
+    # Bug: SIP type payments are not recording branch during processing
+    # Fix: Set branchcode from the manager (staff member) who processed the payment
+    my $sip_fix = $dbh->do(q{
+        UPDATE accountlines al
+        JOIN borrowers b ON al.manager_id = b.borrowernumber
+        SET al.branchcode = b.branchcode
+        WHERE al.branchcode IS NULL
+        AND al.payment_type LIKE 'SIP%'
+    });
+
+    # FIX 2: Various debit types missing branchcode
+    # Bug: OVERDUE, RESERVE, and other debit types not recording branch
+    # Fix: Set debit branchcode to match the corresponding payment's branchcode
+    # (Uses offsets table to find the related payment transaction)
+    my $debit_fix = $dbh->do(q{
+        UPDATE accountlines debit
+        JOIN account_offsets o ON o.debit_id = debit.accountlines_id
+        JOIN accountlines credit ON o.credit_id = credit.accountlines_id
+        SET debit.branchcode = credit.branchcode
+        WHERE debit.branchcode IS NULL
+        AND debit.debit_type_code IS NOT NULL
+        AND credit.branchcode IS NOT NULL
+    });
+
+    return 1;
+}
+
 sub _generate_income_report {
     my ( $self, $startdate, $enddate, $filename ) = @_;
+
+    # TEMPORARY DATA FIXES - Apply before report generation
+    # These fixes address core Koha bugs that haven't been backported yet
+    $self->_apply_temporary_data_fixes();
 
     # Use pipe delimiter for income reports as specified
     my $csv = Text::CSV->new(

@@ -792,6 +792,8 @@ sub _generate_income_report {
                 debit_type_code  => undef,                        # Only credits
                 credit_type_code => { '!=' => 'CASHUP_SURPLUS' }
                 ,    # Exclude reconciliation
+                payment_type     => { '!=' => undef }
+                ,    # Exclude NULL payment_type (credit applications)
                 amount      => { '<', 0 },    # Negative amounts (credits)
                 # BUG FIX: PURCHASE credits have NULL descriptions and were being excluded
                 # by 'NOT LIKE' filter (NULL comparisons return NULL, not TRUE in SQL)

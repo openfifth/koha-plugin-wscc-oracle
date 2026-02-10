@@ -128,7 +128,7 @@ sub configure {
               $self->retrieve_data('default_income_subjective_offset'),
             default_income_subanalysis_offset =>
               $self->retrieve_data('default_income_subanalysis_offset'),
-            funds => $funds,
+            funds                    => $funds,
             fund_mappings            => $fund_mappings,
             vendors                  => $vendors,
             vendor_supplier_mappings => $vendor_supplier_mappings,
@@ -205,7 +205,7 @@ sub configure {
                   scalar $cgi->param('default_income_subjective_offset'),
                 default_income_subanalysis_offset =>
                   scalar $cgi->param('default_income_subanalysis_offset'),
-                fund_field_mappings => encode_json( \%fund_mappings ),
+                fund_field_mappings      => encode_json( \%fund_mappings ),
                 vendor_supplier_mappings =>
                   encode_json( \%vendor_supplier_mappings ),
                 vendor_contract_mappings =>
@@ -470,14 +470,18 @@ sub _generate_invoices_report {
                 $line_count++;
 
                 # Unit price - keep as numeric for calculation
-                my $unitprice = Koha::Number::Price->new( $line->unitprice )->round;
+                my $unitprice =
+                  Koha::Number::Price->new( $line->unitprice )->round;
                 my $quantity = $line->quantity || 1;
 
                 # Tax - keep as numeric for calculation
-                my $tax_value_on_receiving = Koha::Number::Price->new( $line->tax_value_on_receiving )->round;
+                my $tax_value_on_receiving =
+                  Koha::Number::Price->new( $line->tax_value_on_receiving )
+                  ->round;
 
                 # Invoice total includes both line amount and tax
-                $invoice_total += ( $unitprice * $quantity ) + ( $tax_value_on_receiving * $quantity );
+                $invoice_total += ( $unitprice * $quantity ) +
+                  ( $tax_value_on_receiving * $quantity );
                 my $tax_rate_on_receiving = $line->tax_rate_on_receiving * 100;
                 my $tax_code =
                     $tax_rate_on_receiving == 20 ? 'STANDARD'
@@ -498,25 +502,26 @@ sub _generate_invoices_report {
                 # Line amounts are positive (matching header convention)
                 for my $qty_unit ( 1 .. $quantity ) {
                     push @orderlines, [
-                        $invoice->invoicenumber,    # INVOICE_NUMBER
-                        "",            # INVOICE_TOTAL (empty for line)
-                        "",            # INVOICE_DATE (empty for line)
-                        "",            # SUPPLIER_NUMBER (empty for line)
-                        "",            # CONTRACT_NUMBER (empty for line)
-                        "",            # SHIPMENT_DATE (empty for line)
-                        sprintf( "%.2f", $unitprice ),    # LINE_AMOUNT (positive)
-                        sprintf( "%.2f", $tax_value_on_receiving ),    # TAX_AMOUNT (positive)
-                        $tax_code,                  # TAX_CODE
-                        $description,               # DESCRIPTION
+                        $invoice->invoicenumber,        # INVOICE_NUMBER
+                        "",    # INVOICE_TOTAL (empty for line)
+                        "",    # INVOICE_DATE (empty for line)
+                        "",    # SUPPLIER_NUMBER (empty for line)
+                        "",    # CONTRACT_NUMBER (empty for line)
+                        "",    # SHIPMENT_DATE (empty for line)
+                        sprintf( "%.2f", $unitprice ),  # LINE_AMOUNT (positive)
+                        sprintf( "%.2f", $tax_value_on_receiving )
+                        ,                               # TAX_AMOUNT (positive)
+                        $tax_code,                      # TAX_CODE
+                        $description,                   # DESCRIPTION
                         $self->_get_acquisitions_costcenter($budget_code)
-                        ,                           # COST_CENTRE
+                        ,                               # COST_CENTRE
                         $self->_get_acquisitions_objective($budget_code)
-                        ,                           # OBJECTIVE
+                        ,                               # OBJECTIVE
                         $self->_get_acquisitions_subjective($budget_code)
-                        ,                           # SUBJECTIVE
+                        ,                               # SUBJECTIVE
                         $self->_get_acquisitions_subanalysis($budget_code)
-                        ,                           # SUBANALYSIS
-                        $line_count++               # LIN_NUM
+                        ,                               # SUBANALYSIS
+                        $line_count++                   # LIN_NUM
                     ];
                 }
             }
@@ -691,22 +696,25 @@ sub _apply_temporary_data_fixes {
 
     my $dbh = C4::Context->dbh;
 
-    # FIX 1: SIP payments missing branchcode
-    # Bug: SIP type payments are not recording branch during processing
-    # Fix: Set branchcode from the manager (staff member) who processed the payment
-    my $sip_fix = $dbh->do(q{
+ # FIX 1: SIP payments missing branchcode
+ # Bug: SIP type payments are not recording branch during processing
+ # Fix: Set branchcode from the manager (staff member) who processed the payment
+    my $sip_fix = $dbh->do(
+        q{
         UPDATE accountlines al
         JOIN borrowers b ON al.manager_id = b.borrowernumber
         SET al.branchcode = b.branchcode
         WHERE al.branchcode IS NULL
         AND al.payment_type LIKE 'SIP%'
-    });
+    }
+    );
 
     # FIX 2: Various debit types missing branchcode
     # Bug: OVERDUE, RESERVE, and other debit types not recording branch
     # Fix: Set debit branchcode to match the corresponding payment's branchcode
     # (Uses offsets table to find the related payment transaction)
-    my $debit_fix = $dbh->do(q{
+    my $debit_fix = $dbh->do(
+        q{
         UPDATE accountlines debit
         JOIN account_offsets o ON o.debit_id = debit.accountlines_id
         JOIN accountlines credit ON o.credit_id = credit.accountlines_id
@@ -714,7 +722,8 @@ sub _apply_temporary_data_fixes {
         WHERE debit.branchcode IS NULL
         AND debit.debit_type_code IS NOT NULL
         AND credit.branchcode IS NOT NULL
-    });
+    }
+    );
 
     return 1;
 }
@@ -792,14 +801,14 @@ sub _generate_income_report {
                 debit_type_code  => undef,                        # Only credits
                 credit_type_code => { '!=' => 'CASHUP_SURPLUS' }
                 ,    # Exclude reconciliation
-                payment_type     => { '!=' => undef }
+                payment_type => { '!=' => undef }
                 ,    # Exclude NULL payment_type (credit applications)
-                amount      => { '<', 0 },    # Negative amounts (credits)
-                # BUG FIX: PURCHASE credits have NULL descriptions and were being excluded
-                # by 'NOT LIKE' filter (NULL comparisons return NULL, not TRUE in SQL)
+                amount => { '<', 0 },    # Negative amounts (credits)
+                 # BUG FIX: PURCHASE credits have NULL descriptions and were being excluded
+                 # by 'NOT LIKE' filter (NULL comparisons return NULL, not TRUE in SQL)
                 -or => [
-                    description => undef,                         # Include NULL descriptions
-                    description => { 'NOT LIKE' => '%Pay360%' }   # Exclude Pay360
+                    description => undef,    # Include NULL descriptions
+                    description => { 'NOT LIKE' => '%Pay360%' } # Exclude Pay360
                 ]
             }
         );
@@ -841,14 +850,17 @@ sub _generate_income_report {
         my %aggregated;
 
         while ( my $offset = $income_offsets->next ) {
-            my $offset_amount = $offset->get_column('amount') * -1;    # Reverse sign
-            next if $offset_amount <= 0;    # Skip zero or negative
+            my $offset_amount =
+              $offset->get_column('amount') * -1;    # Reverse sign
+            next if $offset_amount <= 0;             # Skip zero or negative
 
-            my $credit_branch = $offset->get_column('credit_branchcode') || 'UNKNOWN';
-            my $debit_branch  = $offset->get_column('debit_branchcode')  || 'UNKNOWN';
-            my $credit_type   = $offset->get_column('credit_type_code');
-            my $debit_type    = $offset->get_column('debit_type_code');
-            my $payment_type  = $offset->get_column('payment_type') || 'UNKNOWN';
+            my $credit_branch =
+              $offset->get_column('credit_branchcode') || 'UNKNOWN';
+            my $debit_branch =
+              $offset->get_column('debit_branchcode') || 'UNKNOWN';
+            my $credit_type  = $offset->get_column('credit_type_code');
+            my $debit_type   = $offset->get_column('debit_type_code');
+            my $payment_type = $offset->get_column('payment_type') || 'UNKNOWN';
 
             # Create aggregation key
             my $key = join( '|',
@@ -887,6 +899,7 @@ sub _generate_income_report {
 
         # Process aggregated results for this cashup session
         for my $row (@income_summary) {
+
             # Amounts already calculated with proper rounding per transaction
             my $exclusive_amount = $row->{total_exclusive};
             my $vat_amount       = $row->{total_vat};
@@ -945,6 +958,8 @@ sub _generate_income_report {
               $self->retrieve_data('default_income_costcentre_offset');
             my $objective_offset =
               $debit_branch_fields->{'Income Objective'};    # From debit branch
+            $objective_offset =
+              $objective; # WSCC wan't this offset to always equal the objective
             my $subjective_offset =
               $self->retrieve_data('default_income_subjective_offset');
             my $subanalysis_offset =
@@ -1074,7 +1089,10 @@ sub _get_debit_type_additional_fields {
     my $additional_fields = Koha::AdditionalFields->search(
         {
             tablename => 'account_debit_types',
-            name => [ 'VAT Code', 'Subjective', 'Subanalysis', 'Cost Centre', 'Objective' ]
+            name      => [
+                'VAT Code', 'Subjective', 'Subanalysis', 'Cost Centre',
+                'Objective'
+            ]
         }
     );
 

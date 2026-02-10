@@ -807,8 +807,8 @@ sub _generate_income_report {
         # Skip if no income transactions in this session
         next unless $income_transactions->count;
 
-     # Aggregate using offsets (same logic as before, but without DATE grouping)
-        my $income_summary = Koha::Account::Offsets->search(
+        # Fetch individual offsets (NOT aggregated) for per-line VAT calculation
+        my $income_offsets = Koha::Account::Offsets->search(
             {
                 'me.credit_id' => {
                     '-in' => $income_transactions->_resultset->get_column(
@@ -821,26 +821,63 @@ sub _generate_income_report {
                     { 'credit' => 'credit_type_code' },
                     { 'debit'  => 'debit_type_code' }
                 ],
-                group_by => [
-                    'credit.branchcode',       'debit.branchcode',
-                    'credit.credit_type_code', 'credit_type_code.description',
-                    'debit.debit_type_code',   'debit_type_code.description',
-                    'credit.payment_type'
-                ],
                 'select' => [
-                    { sum => 'me.amount' },         'credit.branchcode',
+                    'me.amount',                    'credit.branchcode',
                     'debit.branchcode',             'credit.credit_type_code',
                     'credit_type_code.description', 'debit.debit_type_code',
                     'debit_type_code.description',  'credit.payment_type'
                 ],
                 'as' => [
-                    'total_amount',       'credit_branchcode',
+                    'amount',             'credit_branchcode',
                     'debit_branchcode',   'credit_type_code',
                     'credit_description', 'debit_type_code',
                     'debit_description',  'payment_type'
                 ]
             }
         );
+
+        # Aggregate in memory with per-line VAT calculation
+        # Key: credit_branch|debit_branch|credit_type|debit_type|payment_type
+        my %aggregated;
+
+        while ( my $offset = $income_offsets->next ) {
+            my $offset_amount = $offset->get_column('amount') * -1;    # Reverse sign
+            next if $offset_amount <= 0;    # Skip zero or negative
+
+            my $credit_branch = $offset->get_column('credit_branchcode') || 'UNKNOWN';
+            my $debit_branch  = $offset->get_column('debit_branchcode')  || 'UNKNOWN';
+            my $credit_type   = $offset->get_column('credit_type_code');
+            my $debit_type    = $offset->get_column('debit_type_code');
+            my $payment_type  = $offset->get_column('payment_type') || 'UNKNOWN';
+
+            # Create aggregation key
+            my $key = join( '|',
+                $credit_branch, $debit_branch, $credit_type,
+                $debit_type,    $payment_type );
+
+            # Calculate VAT for this individual offset
+            my $vat_code = $self->_get_debit_type_vat_code($debit_type);
+            my ( $exclusive, $vat ) =
+              $self->_calculate_exclusive_and_vat( $offset_amount, $vat_code );
+
+            # Initialize aggregation structure if needed
+            $aggregated{$key} //= {
+                credit_branchcode => $credit_branch,
+                debit_branchcode  => $debit_branch,
+                credit_type_code  => $credit_type,
+                debit_type_code   => $debit_type,
+                payment_type      => $payment_type,
+                total_exclusive   => 0,
+                total_vat         => 0,
+            };
+
+            # Accumulate exclusive and VAT amounts separately
+            $aggregated{$key}{total_exclusive} += $exclusive;
+            $aggregated{$key}{total_vat}       += $vat;
+        }
+
+        # Convert aggregated hash to array for processing
+        my @income_summary = values %aggregated;
 
         # Get cashup metadata for document reference and description
         my $register         = $cashup->register;
@@ -849,19 +886,22 @@ sub _generate_income_report {
         my $cashup_timestamp = dt_from_string( $cashup->timestamp );
 
         # Process aggregated results for this cashup session
-        while ( my $row = $income_summary->next ) {
-            my $inclusive_amount =
-              $row->get_column('total_amount') * -1;   # Reverse sign for income
+        for my $row (@income_summary) {
+            # Amounts already calculated with proper rounding per transaction
+            my $exclusive_amount = $row->{total_exclusive};
+            my $vat_amount       = $row->{total_vat};
 
-            next if $inclusive_amount <= 0;    # Skip zero or negative amounts
+            # Round aggregated totals to 2 decimal places
+            $exclusive_amount = sprintf( "%.2f", $exclusive_amount );
+            $vat_amount       = sprintf( "%.2f", $vat_amount );
 
-            my $credit_branch =
-              $row->get_column('credit_branchcode') || 'UNKNOWN';
-            my $debit_branch =
-              $row->get_column('debit_branchcode') || 'UNKNOWN';
-            my $credit_type  = $row->get_column('credit_type_code');
-            my $debit_type   = $row->get_column('debit_type_code');
-            my $payment_type = $row->get_column('payment_type') || 'UNKNOWN';
+            next if $exclusive_amount <= 0;    # Skip zero or negative amounts
+
+            my $credit_branch = $row->{credit_branchcode};
+            my $debit_branch  = $row->{debit_branchcode};
+            my $credit_type   = $row->{credit_type_code};
+            my $debit_type    = $row->{debit_type_code};
+            my $payment_type  = $row->{payment_type};
 
             # Generate document reference (sequential across all cashups)
             my $doc_reference = "AGG" . sprintf( "%06d", $line_number );
@@ -910,11 +950,8 @@ sub _generate_income_report {
             my $subanalysis_offset =
               $self->retrieve_data('default_income_subanalysis_offset');
 
-            # Get VAT information and calculate exclusive/VAT split
+            # Get VAT code for this debit type
             my $vat_code = $self->_get_debit_type_vat_code($debit_type);
-            my ( $exclusive_amount, $vat_amount ) =
-              $self->_calculate_exclusive_and_vat( $inclusive_amount,
-                $vat_code );
 
             # Create line description in format: "[Payment Type] [Item Type]"
             my $line_description = $payment_type . " " . $debit_type;

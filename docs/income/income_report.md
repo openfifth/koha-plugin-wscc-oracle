@@ -25,24 +25,24 @@ The CSV file does not include a header line and there is only one type of record
 
 ## Oracle CSV Fields
 
-| Field No. | Source Field               | Type   | Description                                      | Sample Data                    |
-| --------: | :------------------------- | :----- | :----------------------------------------------- | :----------------------------- |
-|         1 | D_Document Document Number | TEXT   | Any Reference Number from O5TH                   | AGG000001                      |
-|         2 | D_Document Description     | TEXT   | `<slip_no>”-“<branch>”-LIB-Income”`              | SEP15/20/CN-Crawley-LIB-Income |
-|         3 | D_Document Date            | TEXT   | Accounting Date                                  | 2025/03/21                     |
-|         4 | D_Line Number              | TEXT   | Line Number                                      | 1                              |
-|         5 | D_Line Amount              | AMOUNT | Postive Amount (No Refunds)                      | 450                            |
-|         6 | D_Cost Centre              | TEXT   | Cost Centre (Credit branch 'Income Cost Centre') | RN03                           |
-|         7 | D_Objective                | TEXT   | Objective (Credit branch 'Income Objective')     | CUL001                         |
-|         8 | D_Subjective               | TEXT   | Subjective (Debit type 'Subjective')             | 841800                         |
-|         9 | D_Subanalysis              | TEXT   | Subanalysis (Debit type 'Subanalysis')           | 5435                           |
-|        10 | D_Cost Centre Offset       | TEXT   | Cost Centre (Plugin configurable)                | RZ00                           |
-|        11 | D_Objective Offset         | TEXT   | Objective (Debit branch 'Income Objective')      | CUL001                         |
-|        12 | D_Subjective Offset        | TEXT   | Subjective (Plugin configurable)                 | 810400                         |
-|        13 | D_Subanalysis Offset       | TEXT   | Subanalysis (Plugin configurable)                | 8201                           |
-|        14 | D_Line Description         | TEXT   | Description from Source                          | Withdrawn books for sale       |
-|        15 | D_VAT Code                 | TEXT   | VAT Code                                         | STD                            |
-|        16 | D_VAT Amount               | AMOUNT | VAT Amount                                       | 90                             |
+| Field No. | Source Field               | Type   | Description                                         | Sample Data                       |
+| --------: | :------------------------- | :----- | :-------------------------------------------------- | :-------------------------------- |
+|         1 | D_Document Document Number | TEXT   | Any Reference Number from O5TH                      | AGG000001                         |
+|         2 | D_Document Description     | TEXT   | `<date>:<register_id>(<cashup_id>)-<branch>`        | Feb11/26/1(42)-CN                 |
+|         3 | D_Document Date            | TEXT   | Accounting Date                                     | 2025/03/21                        |
+|         4 | D_Line Number              | TEXT   | Line Number                                         | 1                                 |
+|         5 | D_Line Amount              | AMOUNT | Amount (positive for income, negative for payouts)  | 450 or -450                       |
+|         6 | D_Cost Centre              | TEXT   | Cost Centre (Credit branch 'Income Cost Centre')    | RN03                              |
+|         7 | D_Objective                | TEXT   | Objective (Credit branch 'Income Objective')        | CUL001                            |
+|         8 | D_Subjective               | TEXT   | Subjective (Debit type 'Subjective')                | 841800                            |
+|         9 | D_Subanalysis              | TEXT   | Subanalysis (Debit type 'Subanalysis')              | 5435                              |
+|        10 | D_Cost Centre Offset       | TEXT   | Cost Centre (Plugin configurable)                   | RZ00                              |
+|        11 | D_Objective Offset         | TEXT   | Objective (Debit branch 'Income Objective')         | CUL001                            |
+|        12 | D_Subjective Offset        | TEXT   | Subjective (Plugin configurable)                    | 810400                            |
+|        13 | D_Subanalysis Offset       | TEXT   | Subanalysis (Plugin configurable)                   | 8201                              |
+|        14 | D_Line Description         | TEXT   | Description ("REFUND" prefix for payouts)           | CASH OVERDUE or REFUND CASH LOST  |
+|        15 | D_VAT Code                 | TEXT   | VAT Code                                            | STD                               |
+|        16 | D_VAT Amount               | AMOUNT | VAT Amount (positive for income, negative for refunds) | 90 or -90                       |
 
 ## Koha Field mappings
 
@@ -69,6 +69,44 @@ Income report fields are resolved using a two-tier precedence system:
 - **Subjective Offset**: Configurable at plugin level (default: 810400 - Other Income)
 - **Subanalysis Offset**: Configurable at plugin level (default: 8201)
 
+## Payout (Refund) Handling
+
+**As of 2026-02-11, the report now includes PAYOUT transactions (refunds) with negative amounts.**
+
+### How Payouts Work
+
+When a refund is issued in Koha:
+1. A **REFUND credit** is created to reverse the original charge
+2. A **PAYOUT debit** is created at the register where the refund is issued (cash leaving the till)
+3. These are linked via account offsets
+
+### Payout Representation in Report
+
+- **Amount (Field 5)**: Negative value (e.g., -£10.00)
+- **VAT Amount (Field 16)**: Negative value (e.g., -£2.00)
+- **Document Description (Field 2)**: Ends with "LIB-REFUND" instead of "LIB-Income"
+- **Line Description (Field 14)**: Prefixed with "REFUND" (e.g., "REFUND CASH OVERDUE")
+- **Debit Type**: Shows the **original transaction type** that was refunded (e.g., OVERDUE, LOST, PURCHASE)
+
+### Cross-Register Refunds
+
+When a payment is made at Register A but refunded at Register B:
+- Register A's cashup shows: +£10.00 (original income)
+- Register B's cashup shows: -£10.00 (payout)
+- Both appear in their respective cashup sessions
+- This maintains accurate per-register cash accounting
+
+### Same COA Codes
+
+Payouts use the **same Chart of Accounts codes** as the original income transactions:
+- Cost Centre, Objective, Subjective, Subanalysis resolved from the original debit type
+- No separate GL accounts needed for refunds
+
+### Report Balancing
+
+The sum of all amounts (income + payouts) in the report equals the net cashup total:
+- Example: £100 income - £20 payouts = £80 net
+
 ## Additional notes
 
 - Koha should post the sum of transactions per library per debit type per receipt type (configurable as payment type in Koha) per day.
@@ -94,8 +132,8 @@ Income report fields are resolved using a two-tier precedence system:
   | PAY360        | payment using online payments system, Pay360                     |
 
 - The descriptions for lines will be:
-  - Payment type followed by debit type
-  - Example: CASH Book Sale
+  - Income: Payment type followed by debit type (e.g., "CASH OVERDUE")
+  - Payouts: "REFUND" prefix, then payment type and original debit type (e.g., "REFUND CASH OVERDUE")
 - Pay360 payments should be EXCLUDED from this report
 
 ## Error handling, Archiving and Recovery

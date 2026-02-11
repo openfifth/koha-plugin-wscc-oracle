@@ -728,6 +728,35 @@ sub _apply_temporary_data_fixes {
     return 1;
 }
 
+# Helper method to find the original debit type from a REFUND credit
+# When a payout occurs, we want to show what was originally refunded (e.g., OVERDUE)
+sub _get_original_debit_type_from_refund {
+    my ( $self, $refund_credit_id ) = @_;
+
+    # Find the offset where this REFUND credit reversed an original debit
+    my $original_offset = Koha::Account::Offsets->search(
+        {
+            'me.credit_id' => $refund_credit_id,
+            'me.debit_id'  => { '!=' => undef }
+        },
+        {
+            join => { 'debit' => 'debit_type_code' },
+            'select' => [
+                'debit.debit_type_code',
+                'debit_type_code.description'
+            ],
+            'as' => [
+                'original_debit_type',
+                'original_debit_description'
+            ]
+        }
+    )->first;
+
+    return $original_offset
+        ? $original_offset->get_column('original_debit_type')
+        : 'UNKNOWN';
+}
+
 sub _generate_income_report {
     my ( $self, $startdate, $enddate, $filename ) = @_;
 
@@ -813,8 +842,17 @@ sub _generate_income_report {
             }
         );
 
-        # Skip if no income transactions in this session
-        next unless $income_transactions->count;
+        # NEW: Query for payout transactions (refunds - money leaving register)
+        my $payout_transactions = $session_accountlines->search(
+            {
+                debit_type_code  => 'PAYOUT',    # Only PAYOUT debits
+                credit_type_code => undef,       # Debits have NULL credit_type
+                amount           => { '>', 0 },  # Positive amounts (debits in Koha)
+            }
+        );
+
+        # Skip if no transactions at all in this session
+        next unless ( $income_transactions->count || $payout_transactions->count );
 
         # Fetch individual offsets (NOT aggregated) for per-line VAT calculation
         my $income_offsets = Koha::Account::Offsets->search(
@@ -845,10 +883,47 @@ sub _generate_income_report {
             }
         );
 
+        # NEW: Fetch payout offsets (where PAYOUT debit links to REFUND credit)
+        # For payouts we need to find the original transaction type that was refunded
+        my $payout_offsets = Koha::Account::Offsets->search(
+            {
+                'me.debit_id' => {
+                    '-in' => $payout_transactions->_resultset->get_column(
+                        'accountlines_id')->as_query
+                },
+                'me.credit_id' => { '!=' => undef }    # Must have linked REFUND credit
+            },
+            {
+                join => [
+                    { 'debit'  => 'debit_type_code' },    # PAYOUT debit
+                    { 'credit' => 'credit_type_code' }    # REFUND credit
+                ],
+                'select' => [
+                    'me.amount',                      # Offset amount (positive)
+                    'debit.branchcode',               # Where payout occurred
+                    'credit.branchcode',              # Where original payment was
+                    'debit.debit_type_code',          # Should be 'PAYOUT'
+                    'debit_type_code.description',    # 'Payout'
+                    'credit.credit_type_code',        # Should be 'REFUND'
+                    'credit_type_code.description',   # 'Refund'
+                    'debit.payment_type',             # Payment method (CASH, CARD, etc)
+                    'credit.accountlines_id'          # For looking up original debit
+                ],
+                'as' => [
+                    'amount',              'payout_branchcode',
+                    'original_branchcode', 'debit_type_code',
+                    'debit_description',   'credit_type_code',
+                    'credit_description',  'payment_type',
+                    'refund_credit_id'
+                ]
+            }
+        );
+
         # Aggregate in memory with per-line VAT calculation
-        # Key: credit_branch|debit_branch|credit_type|debit_type|payment_type
+        # Key: branch|original_branch|credit_type|debit_type|payment_type|direction
         my %aggregated;
 
+        # Process INCOME offsets (existing logic with direction flag added)
         while ( my $offset = $income_offsets->next ) {
             my $offset_amount =
               $offset->get_column('amount') * -1;    # Reverse sign
@@ -862,10 +937,10 @@ sub _generate_income_report {
             my $debit_type   = $offset->get_column('debit_type_code');
             my $payment_type = $offset->get_column('payment_type') || 'UNKNOWN';
 
-            # Create aggregation key
+            # Create aggregation key with direction flag
             my $key = join( '|',
                 $credit_branch, $debit_branch, $credit_type,
-                $debit_type,    $payment_type );
+                $debit_type,    $payment_type, 'INCOME' );
 
             # Calculate VAT for this individual offset
             my $vat_code = $self->_get_debit_type_vat_code($debit_type);
@@ -879,11 +954,63 @@ sub _generate_income_report {
                 credit_type_code  => $credit_type,
                 debit_type_code   => $debit_type,
                 payment_type      => $payment_type,
+                direction         => 'INCOME',
                 total_exclusive   => 0,
                 total_vat         => 0,
             };
 
             # Accumulate exclusive and VAT amounts separately
+            $aggregated{$key}{total_exclusive} += $exclusive;
+            $aggregated{$key}{total_vat}       += $vat;
+        }
+
+        # NEW: Process PAYOUT offsets with NEGATIVE amounts (money leaving register)
+        while ( my $offset = $payout_offsets->next ) {
+            my $offset_amount = $offset->get_column('amount');  # Keep positive initially
+            next if $offset_amount <= 0;    # Skip zero or negative
+
+            my $payout_branch =
+              $offset->get_column('payout_branchcode') || 'UNKNOWN';
+            my $original_branch =
+              $offset->get_column('original_branchcode') || 'UNKNOWN';
+            my $payment_type = $offset->get_column('payment_type') || 'UNKNOWN';
+            my $refund_credit_id = $offset->get_column('refund_credit_id');
+
+            # Look up the original debit type that was refunded (e.g., OVERDUE, LOST)
+            my $original_debit_type =
+              $self->_get_original_debit_type_from_refund($refund_credit_id);
+
+            # Create aggregation key (using payout_branch as main, original debit type)
+            my $key = join( '|',
+                $payout_branch,       # Where refund occurred (main branch)
+                $original_branch,     # Where original payment was (for offset fields)
+                'REFUND',             # Credit type
+                $original_debit_type, # What was refunded (OVERDUE, LOST, etc.)
+                $payment_type, 'PAYOUT'    # Direction flag
+            );
+
+            # Calculate VAT using original debit type's VAT code
+            my $vat_code = $self->_get_debit_type_vat_code($original_debit_type);
+            my ( $exclusive, $vat ) =
+              $self->_calculate_exclusive_and_vat( $offset_amount, $vat_code );
+
+            # Make amounts NEGATIVE (money leaving register)
+            $exclusive = $exclusive * -1;
+            $vat       = $vat * -1;
+
+            # Initialize aggregation structure
+            $aggregated{$key} //= {
+                credit_branchcode => $payout_branch,    # Where payout occurred
+                debit_branchcode  => $original_branch,  # Where original charge was
+                credit_type_code  => 'REFUND',
+                debit_type_code   => $original_debit_type,
+                payment_type      => $payment_type,
+                direction         => 'PAYOUT',
+                total_exclusive   => 0,
+                total_vat         => 0,
+            };
+
+            # Accumulate negative amounts
             $aggregated{$key}{total_exclusive} += $exclusive;
             $aggregated{$key}{total_vat}       += $vat;
         }
@@ -908,21 +1035,23 @@ sub _generate_income_report {
             $exclusive_amount = sprintf( "%.2f", $exclusive_amount );
             $vat_amount       = sprintf( "%.2f", $vat_amount );
 
-            next if $exclusive_amount <= 0;    # Skip zero or negative amounts
+            # UPDATED: Allow negative amounts (payouts) but skip zero
+            next if $exclusive_amount == 0;    # Only skip zero amounts
 
             my $credit_branch = $row->{credit_branchcode};
             my $debit_branch  = $row->{debit_branchcode};
             my $credit_type   = $row->{credit_type_code};
             my $debit_type    = $row->{debit_type_code};
             my $payment_type  = $row->{payment_type};
+            my $direction     = $row->{direction} || 'INCOME';
 
             # Generate document reference (sequential across all cashups)
             my $doc_reference = "AGG" . sprintf( "%06d", $line_number );
 
             # Generate document description with cashup visibility
-            # Format: MonDD/YY/RegisterID(CashupID)-BranchCode-LIB-Income
+            # Format: MonDD/YY/RegisterID(CashupID)-BranchCode
             my $doc_description = sprintf(
-                "%s:%s(%d)-%s-LIB-Income",
+                "%s:%s(%d)-%s",
                 $cashup_timestamp->strftime('%b%d/%y'),    # MonDD/YY
                 $register_id,
                 $cashup_id,
@@ -968,9 +1097,16 @@ sub _generate_income_report {
             # Get VAT code for this debit type
             my $vat_code = $self->_get_debit_type_vat_code($debit_type);
 
-            # Create line description in format: "[Payment Type] [Item Type]"
-            my $line_description = $payment_type . " " . $debit_type;
-            $line_description =~ s/[|"]//g;   # Remove pipe and quote characters
+            # Create line description with refund indicator for payouts
+            # Format: "REFUND [Payment Type] [Item Type]" or "[Payment Type] [Item Type]"
+            my $line_description;
+            if ( $direction eq 'PAYOUT' ) {
+                $line_description = "REFUND " . $payment_type . " " . $debit_type;
+            }
+            else {
+                $line_description = $payment_type . " " . $debit_type;
+            }
+            $line_description =~ s/[|"]//g;    # Remove pipe and quote characters
 
             # Build record according to 16-field specification
             $csv->print(

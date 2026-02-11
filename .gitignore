@@ -1,2 +1,13 @@
 .claude
 CLAUDE.md
+
+# Test files
+test_*.pl
+analyze_*.pl
+regenerate_*.pl
+
+# CSV output files
+*.csv
+
+# Temporary analysis files
+DISCREPANCY_SUMMARY.md

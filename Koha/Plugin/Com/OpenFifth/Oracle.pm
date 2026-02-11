@@ -734,10 +734,12 @@ sub _get_original_debit_type_from_refund {
     my ( $self, $refund_credit_id ) = @_;
 
     # Find the offset where this REFUND credit reversed an original debit
+    # Exclude PAYOUT debits (we want the original charge, not the payout itself)
     my $original_offset = Koha::Account::Offsets->search(
         {
-            'me.credit_id' => $refund_credit_id,
-            'me.debit_id'  => { '!=' => undef }
+            'me.credit_id'        => $refund_credit_id,
+            'me.debit_id'         => { '!=' => undef },
+            'debit.debit_type_code' => { '!=' => 'PAYOUT' }  # Exclude the PAYOUT itself
         },
         {
             join => { 'debit' => 'debit_type_code' },
@@ -748,9 +750,10 @@ sub _get_original_debit_type_from_refund {
             'as' => [
                 'original_debit_type',
                 'original_debit_description'
-            ]
+            ],
+            rows => 1  # Limit to first result
         }
-    )->first;
+    )->next;  # Use ->next instead of ->first
 
     return $original_offset
         ? $original_offset->get_column('original_debit_type')
@@ -824,7 +827,7 @@ sub _generate_income_report {
         # Get accountlines for this cashup session
         my $session_accountlines = $cashup->accountlines();
 
-       # Filter for income transactions (credits only, excluding reconciliation)
+        # Query for income transactions (credits only, excluding reconciliation)
         my $income_transactions = $session_accountlines->search(
             {
                 debit_type_code  => undef,                        # Only credits
@@ -842,7 +845,7 @@ sub _generate_income_report {
             }
         );
 
-        # NEW: Query for payout transactions (refunds - money leaving register)
+        # Query for payout transactions (refunds - money leaving register)
         my $payout_transactions = $session_accountlines->search(
             {
                 debit_type_code  => 'PAYOUT',    # Only PAYOUT debits
@@ -854,7 +857,7 @@ sub _generate_income_report {
         # Skip if no transactions at all in this session
         next unless ( $income_transactions->count || $payout_transactions->count );
 
-        # Fetch individual offsets (NOT aggregated) for per-line VAT calculation
+        # Fetch individual income offsets (NOT aggregated) for per-line VAT calculation
         my $income_offsets = Koha::Account::Offsets->search(
             {
                 'me.credit_id' => {
@@ -883,8 +886,7 @@ sub _generate_income_report {
             }
         );
 
-        # NEW: Fetch payout offsets (where PAYOUT debit links to REFUND credit)
-        # For payouts we need to find the original transaction type that was refunded
+        # Fetch individual payout offsets (NOT aggregated, linking PAYOUT debit to REFUND credit)
         my $payout_offsets = Koha::Account::Offsets->search(
             {
                 'me.debit_id' => {
@@ -964,10 +966,11 @@ sub _generate_income_report {
             $aggregated{$key}{total_vat}       += $vat;
         }
 
-        # NEW: Process PAYOUT offsets with NEGATIVE amounts (money leaving register)
+        # Process PAYOUT offsets with NEGATIVE amounts (money leaving register)
         while ( my $offset = $payout_offsets->next ) {
-            my $offset_amount = $offset->get_column('amount');  # Keep positive initially
-            next if $offset_amount <= 0;    # Skip zero or negative
+            # Offset amounts for PAYOUT->REFUND are negative, reverse sign to get absolute value
+            my $offset_amount = abs( $offset->get_column('amount') );
+            next if $offset_amount <= 0;    # Skip zero amounts
 
             my $payout_branch =
               $offset->get_column('payout_branchcode') || 'UNKNOWN';

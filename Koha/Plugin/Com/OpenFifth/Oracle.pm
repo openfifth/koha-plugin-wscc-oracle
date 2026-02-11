@@ -469,19 +469,27 @@ sub _generate_invoices_report {
             while ( my $line = $orders->next ) {
                 $line_count++;
 
-                # Unit price - keep as numeric for calculation
-                my $unitprice =
-                  Koha::Number::Price->new( $line->unitprice )->round;
+                # Unit price - always use tax-excluded value since
+                # TAX_AMOUNT is sent as a separate field
+                my $unitprice_tax_excluded =
+                  Koha::Number::Price->new( $line->unitprice_tax_excluded )
+                  ->round;
                 my $quantity = $line->quantity || 1;
 
-                # Tax - keep as numeric for calculation
+                # Tax - tax_value_on_receiving is the TOTAL tax for the
+                # entire order line (all units), so divide by quantity
+                # to get per-unit tax
                 my $tax_value_on_receiving =
                   Koha::Number::Price->new( $line->tax_value_on_receiving )
                   ->round;
+                my $tax_per_unit =
+                  Koha::Number::Price->new( $tax_value_on_receiving / $quantity )
+                  ->round;
 
-                # Invoice total includes both line amount and tax
-                $invoice_total += ( $unitprice * $quantity ) +
-                  ( $tax_value_on_receiving * $quantity );
+                # Invoice total: unitprice_tax_excluded * qty + total tax
+                # (tax_value_on_receiving already covers all units)
+                $invoice_total += ( $unitprice_tax_excluded * $quantity ) +
+                  $tax_value_on_receiving;
                 my $tax_rate_on_receiving = $line->tax_rate_on_receiving * 100;
                 my $tax_code =
                     $tax_rate_on_receiving == 20 ? 'STANDARD'
@@ -508,9 +516,9 @@ sub _generate_invoices_report {
                         "",    # SUPPLIER_NUMBER (empty for line)
                         "",    # CONTRACT_NUMBER (empty for line)
                         "",    # SHIPMENT_DATE (empty for line)
-                        sprintf( "%.2f", $unitprice ),  # LINE_AMOUNT (positive)
-                        sprintf( "%.2f", $tax_value_on_receiving )
-                        ,                               # TAX_AMOUNT (positive)
+                        sprintf( "%.2f", $unitprice_tax_excluded ),  # LINE_AMOUNT (tax-excluded)
+                        sprintf( "%.2f", $tax_per_unit )
+                        ,                               # TAX_AMOUNT (per unit)
                         $tax_code,                      # TAX_CODE
                         $description,                   # DESCRIPTION
                         $self->_get_acquisitions_costcenter($budget_code)

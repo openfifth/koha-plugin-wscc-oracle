@@ -836,11 +836,12 @@ sub _generate_income_report {
         my $session_accountlines = $cashup->accountlines();
 
         # Query for income transactions (credits only, excluding reconciliation)
+        # Note: CASHUP_SURPLUS handled separately as it has CREATE-only offsets
         my $income_transactions = $session_accountlines->search(
             {
                 debit_type_code  => undef,                        # Only credits
                 credit_type_code => { '!=' => 'CASHUP_SURPLUS' }
-                ,    # Exclude reconciliation
+                ,    # Exclude reconciliation (handled separately)
                 payment_type => { '!=' => undef }
                 ,    # Exclude NULL payment_type (credit applications)
                 amount => { '<', 0 },    # Negative amounts (credits)
@@ -862,8 +863,30 @@ sub _generate_income_report {
             }
         );
 
+        # Query for cashup reconciliation transactions
+        # These have CREATE-only offsets (no debit-credit pairs), so process separately
+        my $surplus_transactions = $session_accountlines->search(
+            {
+                credit_type_code => 'CASHUP_SURPLUS',    # Cash overages
+                debit_type_code  => undef,
+                amount           => { '<', 0 },          # Negative amounts (credits)
+            }
+        );
+
+        my $deficit_transactions = $session_accountlines->search(
+            {
+                debit_type_code  => 'CASHUP_DEFICIT',    # Cash shortages
+                credit_type_code => undef,
+                amount           => { '>', 0 },          # Positive amounts (debits)
+            }
+        );
+
         # Skip if no transactions at all in this session
-        next unless ( $income_transactions->count || $payout_transactions->count );
+        next
+          unless ( $income_transactions->count
+            || $payout_transactions->count
+            || $surplus_transactions->count
+            || $deficit_transactions->count );
 
         # Fetch individual income offsets (NOT aggregated) for per-line VAT calculation
         my $income_offsets = Koha::Account::Offsets->search(
@@ -932,6 +955,82 @@ sub _generate_income_report {
         # Aggregate in memory with per-line VAT calculation
         # Key: branch|original_branch|credit_type|debit_type|payment_type|direction
         my %aggregated;
+
+        # Process CASHUP_SURPLUS transactions (cash overages - positive income)
+        # These have CREATE-only offsets, so process directly from accountlines
+        while ( my $surplus_line = $surplus_transactions->next ) {
+            my $amount = abs( $surplus_line->amount );    # Convert to positive
+            next if $amount <= 0;
+
+            my $branch       = $surplus_line->branchcode || 'UNKNOWN';
+            my $payment_type = $surplus_line->payment_type || 'CASH';
+
+            # Create aggregation key
+            my $key = join( '|',
+                $branch, $branch, 'CASHUP_SURPLUS',
+                'CASHUP_SURPLUS', $payment_type, 'INCOME' );
+
+            # CASHUP_SURPLUS is typically out of scope for VAT
+            my $vat_code = 'OUT OF SCOPE';
+            my ( $exclusive, $vat ) =
+              $self->_calculate_exclusive_and_vat( $amount, $vat_code );
+
+            # Initialize aggregation structure
+            $aggregated{$key} //= {
+                credit_branchcode => $branch,
+                debit_branchcode  => $branch,
+                credit_type_code  => 'CASHUP_SURPLUS',
+                debit_type_code   => 'CASHUP_SURPLUS',
+                payment_type      => $payment_type,
+                direction         => 'INCOME',
+                total_exclusive   => 0,
+                total_vat         => 0,
+            };
+
+            # Accumulate amounts
+            $aggregated{$key}{total_exclusive} += $exclusive;
+            $aggregated{$key}{total_vat}       += $vat;
+        }
+
+        # Process CASHUP_DEFICIT transactions (cash shortages - negative income)
+        # These have CREATE-only offsets, so process directly from accountlines
+        while ( my $deficit_line = $deficit_transactions->next ) {
+            my $amount = abs( $deficit_line->amount );    # Get absolute value
+            next if $amount <= 0;
+
+            my $branch       = $deficit_line->branchcode || 'UNKNOWN';
+            my $payment_type = $deficit_line->payment_type || 'CASH';
+
+            # Create aggregation key
+            my $key = join( '|',
+                $branch, $branch, 'CASHUP_DEFICIT',
+                'CASHUP_DEFICIT', $payment_type, 'DEFICIT' );
+
+            # CASHUP_DEFICIT is typically out of scope for VAT
+            my $vat_code = 'OUT OF SCOPE';
+            my ( $exclusive, $vat ) =
+              $self->_calculate_exclusive_and_vat( $amount, $vat_code );
+
+            # Make amounts NEGATIVE (reducing income)
+            $exclusive = $exclusive * -1;
+            $vat       = $vat * -1;
+
+            # Initialize aggregation structure
+            $aggregated{$key} //= {
+                credit_branchcode => $branch,
+                debit_branchcode  => $branch,
+                credit_type_code  => 'CASHUP_DEFICIT',
+                debit_type_code   => 'CASHUP_DEFICIT',
+                payment_type      => $payment_type,
+                direction         => 'DEFICIT',
+                total_exclusive   => 0,
+                total_vat         => 0,
+            };
+
+            # Accumulate negative amounts
+            $aggregated{$key}{total_exclusive} += $exclusive;
+            $aggregated{$key}{total_vat}       += $vat;
+        }
 
         # Process INCOME offsets (existing logic with direction flag added)
         while ( my $offset = $income_offsets->next ) {
@@ -1108,11 +1207,17 @@ sub _generate_income_report {
             # Get VAT code for this debit type
             my $vat_code = $self->_get_debit_type_vat_code($debit_type);
 
-            # Create line description with refund indicator for payouts
-            # Format: "REFUND [Payment Type] [Item Type]" or "[Payment Type] [Item Type]"
+            # Create line description based on transaction direction
+            # Format varies by direction: INCOME, PAYOUT, or DEFICIT
             my $line_description;
             if ( $direction eq 'PAYOUT' ) {
                 $line_description = "REFUND " . $payment_type . " " . $debit_type;
+            }
+            elsif ( $direction eq 'DEFICIT' ) {
+                $line_description = "CASHUP DEFICIT " . $payment_type;
+            }
+            elsif ( $debit_type eq 'CASHUP_SURPLUS' ) {
+                $line_description = "CASHUP SURPLUS " . $payment_type;
             }
             else {
                 $line_description = $payment_type . " " . $debit_type;

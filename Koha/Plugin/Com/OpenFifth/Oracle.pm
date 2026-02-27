@@ -20,14 +20,14 @@ use Mojo::JSON qw{ decode_json encode_json };
 use Text::CSV  qw( csv );
 use C4::Context;
 
-our $VERSION = '0.4.0';
+our $VERSION = '0.4.1';
 
 our $metadata = {
     name => 'Oracle Finance Integration',
 
     author          => 'Open Fifth',
     date_authored   => '2025-04-24',
-    date_updated    => '2026-02-13',
+    date_updated    => '2026-02-27',
     minimum_version => '24.11.00.000',
     maximum_version => '25.05.00.000',
     version         => $VERSION,
@@ -243,10 +243,14 @@ sub cronjob_nightly {
     $previous_day //=
       $selected_days[-1];    # Wrap around to last one from previous week
 
-    # Calculate the start date (previous selected day) and end date (today)
+    # Calculate the start date (day after previous selected day) and end date (today).
+    # We add 1 day so the range is (previous_run_day, today] rather than
+    # [previous_run_day, today], preventing invoices on the boundary date from
+    # appearing in two consecutive runs.
     my $now = DateTime->now;
     my $start_date =
-      $now->clone->subtract( days => ( $today - $previous_day ) % 7 );
+      $now->clone->subtract( days => ( $today - $previous_day ) % 7 )
+                 ->add( days => 1 );
     my $end_date = $now;
 
     # Generate both income and invoices reports

@@ -80,6 +80,7 @@ sub upgrade {
 
 sub tool {
     my ( $self, $args ) = @_;
+    $self->install();
     $self->manage_submissions();
 }
 

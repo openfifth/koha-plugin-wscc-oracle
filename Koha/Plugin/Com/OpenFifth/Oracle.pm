@@ -51,6 +51,38 @@ sub new {
     return $self;
 }
 
+sub install {
+    my ($self) = @_;
+    C4::Context->dbh->do(q{
+        CREATE TABLE IF NOT EXISTS `plugin_oracle_submitted_invoices` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `invoicenumber` varchar(255) NOT NULL,
+          `submitted_at` datetime NOT NULL,
+          `submitted_by` varchar(255) NOT NULL DEFAULT 'cron',
+          `filename` varchar(255) DEFAULT NULL,
+          PRIMARY KEY (`id`),
+          UNIQUE KEY `unique_invoicenumber` (`invoicenumber`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    });
+    return 1;
+}
+
+sub uninstall {
+    my ($self) = @_;
+    C4::Context->dbh->do(q{ DROP TABLE IF EXISTS `plugin_oracle_submitted_invoices` });
+    return 1;
+}
+
+sub upgrade {
+    my ($self) = @_;
+    return $self->install();
+}
+
+sub tool {
+    my ( $self, $args ) = @_;
+    $self->manage_submissions();
+}
+
 sub configure {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
@@ -258,9 +290,10 @@ sub cronjob_nightly {
     my $all_success  = 1;
 
     for my $type (@report_types) {
-        my $filename = $self->_generate_filename($type);
+        my $filename         = $self->_generate_filename($type);
+        my $exclude_submitted = $type eq 'invoices' ? 1 : 0;
         my $report =
-          $self->_generate_report( $start_date, $end_date, $type, $filename );
+          $self->_generate_report( $start_date, $end_date, $type, $filename, $exclude_submitted );
 
         next unless $report;
 
@@ -287,6 +320,9 @@ sub cronjob_nightly {
             open my $fh, '<', \$report;
             if ( $transport->upload_file( $fh, $upload_path ) ) {
                 close $fh;
+                if ( $type eq 'invoices' ) {
+                    $self->_mark_invoices_submitted( $self->{_processed_invoices}, $filename, 'cron' );
+                }
             }
             else {
                 # Upload failed for this report type
@@ -301,6 +337,9 @@ sub cronjob_nightly {
               or die "Unable to open $file_path: $!";
             print $fh $report;
             close($fh);
+            if ( $type eq 'invoices' ) {
+                $self->_mark_invoices_submitted( $self->{_processed_invoices}, $filename, 'cron' );
+            }
         }
     }
 
@@ -406,19 +445,21 @@ sub api_routes {
 }
 
 sub _generate_report {
-    my ( $self, $startdate, $enddate, $type, $filename ) = @_;
+    my ( $self, $startdate, $enddate, $type, $filename, $exclude_submitted ) = @_;
     if ( $type eq 'income' ) {
         return $self->_generate_income_report( $startdate, $enddate,
             $filename );
     }
     elsif ( $type eq 'invoices' ) {
         return $self->_generate_invoices_report( $startdate, $enddate,
-            $filename );
+            $filename, $exclude_submitted );
     }
 }
 
 sub _generate_invoices_report {
-    my ( $self, $startdate, $enddate, $filename ) = @_;
+    my ( $self, $startdate, $enddate, $filename, $exclude_submitted ) = @_;
+
+    $self->{_processed_invoices} = [];
 
     my $csv = Text::CSV->new(
         {
@@ -447,6 +488,13 @@ sub _generate_invoices_report {
         $where->{'me.closedate'} = { '<=', $enddate_iso };
     }
 
+    if ($exclude_submitted) {
+        my $submitted = $self->_get_submitted_invoice_numbers();
+        if (%$submitted) {
+            $where->{'me.invoicenumber'} = { '-not_in' => [ keys %$submitted ] };
+        }
+    }
+
     my $invoices = Koha::Acquisition::Invoices->search( $where,
         { prefetch => [ 'booksellerid', 'aqorders' ] } );
 
@@ -464,6 +512,7 @@ sub _generate_invoices_report {
 
         while ( my $invoice = $invoices->next ) {
             $invoice_count++;
+            push @{ $self->{_processed_invoices} }, $invoice->invoicenumber;
             my $invoice_total = 0;
             my $orders        = $invoice->_result->aqorders;
 
@@ -1425,6 +1474,62 @@ sub _calculate_exclusive_and_vat {
     $vat_amount = sprintf( "%.2f", $vat_amount );
 
     return ( $exclusive_amount, $vat_amount );
+}
+
+sub _get_submitted_invoice_numbers {
+    my ($self) = @_;
+    my $dbh  = C4::Context->dbh;
+    my $rows = $dbh->selectall_arrayref(
+        'SELECT invoicenumber FROM plugin_oracle_submitted_invoices',
+        { Slice => {} }
+    );
+    return { map { $_->{invoicenumber} => 1 } @$rows };
+}
+
+sub _mark_invoices_submitted {
+    my ( $self, $invoice_numbers, $filename, $by ) = @_;
+    return unless $invoice_numbers && @$invoice_numbers;
+    my $dbh = C4::Context->dbh;
+    my $sth = $dbh->prepare(
+        'INSERT IGNORE INTO plugin_oracle_submitted_invoices
+         (invoicenumber, submitted_at, submitted_by, filename)
+         VALUES (?, NOW(), ?, ?)'
+    );
+    for my $inv (@$invoice_numbers) {
+        $sth->execute( $inv, $by // 'cron', $filename );
+    }
+}
+
+sub manage_submissions {
+    my ( $self, $args ) = @_;
+    my $cgi = $self->{'cgi'};
+
+    if ( ( $cgi->param('action') // '' ) eq 'clear' ) {
+        my @to_clear = $cgi->multi_param('invoicenumber');
+        if (@to_clear) {
+            my $dbh          = C4::Context->dbh;
+            my $placeholders = join( ',', ('?') x @to_clear );
+            $dbh->do(
+                "DELETE FROM plugin_oracle_submitted_invoices WHERE invoicenumber IN ($placeholders)",
+                undef, @to_clear
+            );
+        }
+    }
+
+    my $dbh  = C4::Context->dbh;
+    my $rows = $dbh->selectall_arrayref(
+        'SELECT invoicenumber, submitted_at, submitted_by, filename
+         FROM plugin_oracle_submitted_invoices
+         ORDER BY submitted_at DESC',
+        { Slice => {} }
+    );
+
+    my $template = $self->get_template( { file => 'manage-submissions.tt' } );
+    $template->param(
+        submitted_invoices => $rows,
+        CLASS              => ref($self),
+    );
+    $self->output_html( $template->output() );
 }
 
 1;

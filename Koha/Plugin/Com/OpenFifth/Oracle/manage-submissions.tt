@@ -1,0 +1,90 @@
+[% USE raw %]
+[% USE Asset %]
+[% USE KohaDates %]
+[% PROCESS 'i18n.inc' %]
+[% SET footerjs = 1 %]
+[% INCLUDE 'doc-head-open.inc' %]
+<title>[% FILTER collapse %]
+    [% t("Submitted Invoices") | html %] &rsaquo;
+    [% t("Oracle Finance Integration") | html %] &rsaquo;
+    [% t("Plugins") | html %] &rsaquo;
+    [% t("Koha") | html %]
+[% END %]</title>
+[% INCLUDE 'doc-head-close.inc' %]
+</head>
+<body id="plugins_wscc_oracle" class="plugins">
+[% WRAPPER 'header.inc' %]
+    [% INCLUDE 'cat-search.inc' %]
+[% END %]
+
+[% WRAPPER 'sub-header.inc' %]
+    [% WRAPPER breadcrumbs %]
+        [% WRAPPER breadcrumb_item %]
+            <a href="/cgi-bin/koha/tools/tools-home.pl">Tools</a>
+        [% END %]
+        [% WRAPPER breadcrumb_item bc_active= 1 %]
+            <span>Submitted Invoices</span>
+        [% END %]
+    [% END #/ WRAPPER breadcrumbs %]
+[% END #/ WRAPPER sub-header.inc %]
+
+<div id="main container-fluid">
+    <div class="row">
+        <div class="col-md-10 order-md-2 order-sm-1">
+            <main>
+                <h1>Submitted Invoices</h1>
+                <div class="page-section">
+                    [% IF submitted_invoices.size %]
+                    <p>The following invoices have been successfully submitted to Oracle. Select invoices and click <strong>Allow resubmission</strong> to remove them from the submitted list.</p>
+                    <form method="get" action="/cgi-bin/koha/plugins/run.pl">
+                        <input type="hidden" name="class" value="[% CLASS | html %]"/>
+                        <input type="hidden" name="method" value="tool"/>
+                        <input type="hidden" name="action" value="clear"/>
+                        <table class="table table-bordered table-sm">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="select-all" title="Select all"/></th>
+                                    <th>Invoice Number</th>
+                                    <th>Submitted At</th>
+                                    <th>Submitted By</th>
+                                    <th>Filename</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                [% FOREACH inv IN submitted_invoices %]
+                                <tr>
+                                    <td><input type="checkbox" name="invoicenumber" value="[% inv.invoicenumber | html %]"/></td>
+                                    <td>[% inv.invoicenumber | html %]</td>
+                                    <td>[% inv.submitted_at | html %]</td>
+                                    <td>[% inv.submitted_by | html %]</td>
+                                    <td>[% inv.filename | html %]</td>
+                                </tr>
+                                [% END %]
+                            </tbody>
+                        </table>
+                        <fieldset class="action">
+                            <input type="submit" class="btn btn-warning" value="Allow resubmission"/>
+                        </fieldset>
+                    </form>
+                    [% ELSE %]
+                    <div class="alert alert-info">
+                        No invoices have been submitted yet.
+                    </div>
+                    [% END %]
+                </div>
+            </main>
+        </div>
+        <div class="col-md-2 order-sm-2 order-md-1">
+            <aside></aside>
+        </div>
+    </div>
+
+[% INCLUDE 'intranet-bottom.inc' %]
+
+<script>
+$(document).ready(function() {
+    $('#select-all').change(function() {
+        $('input[name="invoicenumber"]').prop('checked', $(this).is(':checked'));
+    });
+});
+</script>

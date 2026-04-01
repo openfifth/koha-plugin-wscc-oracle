@@ -78,7 +78,7 @@
                                 <label for="transport_server">(S)FTP server to transfer to:</label>
                                 <select name="transport_server">
                                 [% FOREACH transport IN available_transports %]
-                                    [% IF transport.id == transport_server.id %]
+                                    [% IF transport.id == transport_server %]
                                     <option value="[% transport.id %]" selected>[% transport.name %]</option>
                                     [% ELSE %]
                                     <option value="[% transport.id %]">[% transport.name %]</option>

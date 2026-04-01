@@ -557,7 +557,7 @@ sub _generate_invoices_report {
                 [
                     $invoice->invoicenumber,    # INVOICE_NUMBER
                     $invoice_total,             # INVOICE_TOTAL
-                    $self->_format_oracle_date( $invoice->closedate )
+                    $self->_format_oracle_date( $invoice->billingdate )
                     ,                           # INVOICE_DATE
                     $supplier_number,           # SUPPLIER_NUMBER
                     $contract_number,           # CONTRACT_NUMBER

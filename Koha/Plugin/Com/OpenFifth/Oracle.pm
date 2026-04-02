@@ -445,6 +445,7 @@ sub report_step2 {
     my $enddate   = $cgi->param('to');
     my $type      = $cgi->param('type');
     my $output    = $cgi->param('output');
+    my $exclude   = $cgi->param('exclude') // 1;
 
     if ($startdate) {
         $startdate =~ s/^\s+//;
@@ -460,7 +461,7 @@ sub report_step2 {
 
     my $filename = $self->_generate_filename($type);
     my $results =
-      $self->_generate_report( $startdate, $enddate, $type, $filename );
+      $self->_generate_report( $startdate, $enddate, $type, $filename, $exclude );
 
     my $templatefile;
 
@@ -481,6 +482,7 @@ sub report_step2 {
         enddate   => dt_from_string($enddate),
         results   => $results,
         type      => $type,
+        exclude   => $exclude,
         filename  => $filename,
         CLASS     => ref($self),
     );

@@ -73,9 +73,12 @@
                             <div>
                                 <span class="badge badge-info">Income Report</span>
                                 <span class="text-muted">Cash management format for Oracle</span>
+                                [% IF exclude %]
+                                    <span class="badge badge-warning">Excluding previously submitted records</span>
+                                [% END %]
                             </div>
                             <div class="btn-group">
-                                <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report_step2&from=[% startdate.ymd | uri %]&to=[% enddate.ymd | uri %]&type=[% type | uri %]&output=txt" 
+                                <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report_step2&from=[% startdate.ymd | uri %]&to=[% enddate.ymd | uri %]&type=[% type | uri %]&output=txt&exclude=[% exclude | html %]" 
                                    class="btn btn-primary">
                                     <i class="fa fa-download"></i> Download CSV ([% filename | html %])
                                 </a>
@@ -83,6 +86,7 @@
                                         data-from="[% startdate.ymd | uri %]" 
                                         data-to="[% enddate.ymd | uri %]" 
                                         data-type="[% type | uri %]"
+                                        data-exclude="[% exclude | html %]"
                                         data-class="[% CLASS | uri %]">
                                     <i class="fa fa-upload"></i> Upload to SFTP
                                 </button>
@@ -111,9 +115,12 @@
                             <div>
                                 <span class="badge badge-success">Acquisitions Report</span>
                                 <span class="text-muted">AP Invoice format for Oracle</span>
+                                [% IF exclude %]
+                                    <span class="badge badge-warning">Excluding previously submitted records</span>
+                                [% END %]
                             </div>
                             <div class="btn-group">
-                                <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report_step2&from=[% startdate.ymd | uri %]&to=[% enddate.ymd | uri %]&type=[% type | uri %]&output=txt" 
+                                <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&method=report_step2&from=[% startdate.ymd | uri %]&to=[% enddate.ymd | uri %]&type=[% type | uri %]&output=txt&exclude=[% exclude | html %]" 
                                    class="btn btn-primary">
                                     <i class="fa fa-download"></i> Download CSV ([% filename | html %])
                                 </a>
@@ -121,6 +128,7 @@
                                         data-from="[% startdate.ymd | uri %]" 
                                         data-to="[% enddate.ymd | uri %]" 
                                         data-type="[% type | uri %]"
+                                        data-exclude="[% exclude | html %]"
                                         data-class="[% CLASS | uri %]">
                                     <i class="fa fa-upload"></i> Upload to SFTP
                                 </button>
@@ -164,7 +172,8 @@ $(document).ready(function() {
         var params = {
             from: button.data('from'),
             to: button.data('to'),
-            type: button.data('type')
+            type: button.data('type'),
+            exclude: button.data('exclude')
         };
 
         // Make AJAX request

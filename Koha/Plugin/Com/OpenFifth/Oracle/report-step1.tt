@@ -96,6 +96,11 @@
                                     <option value="txt">TXT File</option>
                                 </select>
                             </li>
+                            <li>
+                                <label for="exclude">Exclude already submitted:</label>
+                                <input type="checkbox" name="exclude" id="exclude" value="1" checked="checked" />
+                                <span class="hint">Only include records that haven't been successfully uploaded before.</span>
+                            </li>
                         </ol>
                     </fieldset>
                     <fieldset class="action">

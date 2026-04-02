@@ -25,6 +25,14 @@
           "description": "Report type (income or invoices)",
           "required": true,
           "type": "string"
+        },
+        {
+          "name": "exclude",
+          "in": "formData",
+          "description": "Exclude previously submitted records",
+          "required": false,
+          "type": "boolean",
+          "default": true
         }
       ],
       "produces": ["application/json"],

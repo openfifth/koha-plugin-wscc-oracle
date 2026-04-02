@@ -29,6 +29,7 @@ sub upload {
     my $from = $c->validation->param('from');
     my $to = $c->validation->param('to');
     my $type = $c->validation->param('type');
+    my $exclude = $c->validation->param('exclude') // 1;
 
     # Parse dates
     my $startdate = eval { dt_from_string($from) };
@@ -73,7 +74,7 @@ sub upload {
 
         # Generate report
         my $filename = $plugin->_generate_filename($type);
-        my $report = $plugin->_generate_report( $startdate, $enddate, $type, $filename );
+        my $report = $plugin->_generate_report( $startdate, $enddate, $type, $filename, $exclude );
 
         unless ($report) {
             return $c->render(
@@ -119,6 +120,14 @@ sub upload {
             close $fh;
 
             if ($upload_result) {
+                # Record submission
+                my $user = C4::Context->user || 'api';
+                if ($type eq 'invoices') {
+                    $plugin->_mark_invoices_submitted($plugin->{_processed_invoices}, $filename, $user);
+                } else {
+                    $plugin->_mark_cashups_submitted($plugin->{_processed_cashups}, $filename, $user);
+                }
+
                 return $c->render(
                     status => 200,
                     openapi => {
@@ -152,7 +161,7 @@ sub upload {
     } else {
         # Save to local file
         my $filename = $plugin->_generate_filename($type);
-        my $report = $plugin->_generate_report( $startdate, $enddate, $type, $filename );
+        my $report = $plugin->_generate_report( $startdate, $enddate, $type, $filename, $exclude );
 
         unless ($report) {
             return $c->render(
@@ -170,6 +179,14 @@ sub upload {
             open( my $fh, '>', $file_path ) or die "Unable to open $file_path: $!";
             print $fh $report;
             close($fh);
+
+            # Record submission
+            my $user = C4::Context->user || 'api';
+            if ($type eq 'invoices') {
+                $plugin->_mark_invoices_submitted($plugin->{_processed_invoices}, $filename, $user);
+            } else {
+                $plugin->_mark_cashups_submitted($plugin->{_processed_cashups}, $filename, $user);
+            }
 
             return $c->render(
                 status => 200,

@@ -53,7 +53,8 @@ sub new {
 
 sub install {
     my ($self) = @_;
-    C4::Context->dbh->do(q{
+    my $dbh = C4::Context->dbh;
+    $dbh->do(q{
         CREATE TABLE IF NOT EXISTS `plugin_oracle_submitted_invoices` (
           `id` int(11) NOT NULL AUTO_INCREMENT,
           `invoicenumber` varchar(255) NOT NULL,
@@ -64,12 +65,25 @@ sub install {
           UNIQUE KEY `unique_invoicenumber` (`invoicenumber`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     });
+    $dbh->do(q{
+        CREATE TABLE IF NOT EXISTS `plugin_oracle_submitted_cashups` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `cashup_id` int(11) NOT NULL,
+          `submitted_at` datetime NOT NULL,
+          `submitted_by` varchar(255) NOT NULL DEFAULT 'cron',
+          `filename` varchar(255) DEFAULT NULL,
+          PRIMARY KEY (`id`),
+          UNIQUE KEY `unique_cashup_id` (`cashup_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    });
     return 1;
 }
 
 sub uninstall {
     my ($self) = @_;
-    C4::Context->dbh->do(q{ DROP TABLE IF EXISTS `plugin_oracle_submitted_invoices` });
+    my $dbh = C4::Context->dbh;
+    $dbh->do(q{ DROP TABLE IF EXISTS `plugin_oracle_submitted_invoices` });
+    $dbh->do(q{ DROP TABLE IF EXISTS `plugin_oracle_submitted_cashups` });
     return 1;
 }
 
@@ -291,8 +305,8 @@ sub cronjob_nightly {
     my $all_success  = 1;
 
     for my $type (@report_types) {
-        my $filename         = $self->_generate_filename($type);
-        my $exclude_submitted = $type eq 'invoices' ? 1 : 0;
+        my $filename          = $self->_generate_filename($type);
+        my $exclude_submitted = 1;
         my $report =
           $self->_generate_report( $start_date, $end_date, $type, $filename, $exclude_submitted );
 
@@ -324,6 +338,9 @@ sub cronjob_nightly {
                 if ( $type eq 'invoices' ) {
                     $self->_mark_invoices_submitted( $self->{_processed_invoices}, $filename, 'cron' );
                 }
+                elsif ( $type eq 'income' ) {
+                    $self->_mark_cashups_submitted( $self->{_processed_cashups}, $filename, 'cron' );
+                }
             }
             else {
                 # Upload failed for this report type
@@ -341,7 +358,16 @@ sub cronjob_nightly {
             if ( $type eq 'invoices' ) {
                 $self->_mark_invoices_submitted( $self->{_processed_invoices}, $filename, 'cron' );
             }
+            elsif ( $type eq 'income' ) {
+                $self->_mark_cashups_submitted( $self->{_processed_cashups}, $filename, 'cron' );
+            }
         }
+    }
+
+    if ($all_success) {
+        $self->store_data(
+            { last_cron_run => dt_from_string()->strftime('%Y-%m-%d %H:%M:%S') }
+        );
     }
 
     return $all_success;
@@ -362,6 +388,7 @@ sub report {
 sub report_step1 {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
+    my $dbh = C4::Context->dbh;
 
     my $startdate =
       $cgi->param('startdate')
@@ -370,10 +397,41 @@ sub report_step1 {
     my $enddate =
       $cgi->param('enddate') ? dt_from_string( $cgi->param('enddate') ) : undef;
 
+    # Identify gaps in the last 30 days
+    my $thirty_days_ago = dt_from_string()->subtract( days => 30 );
+    my $dtf = Koha::Database->new->schema->storage->datetime_parser;
+    my $thirty_days_ago_iso = $dtf->format_date($thirty_days_ago);
+
+    # 1. Unsubmitted Invoices
+    my $submitted_invoices = $self->_get_submitted_invoice_numbers();
+    my $inv_where = { 'me.closedate' => { '>=', $thirty_days_ago_iso } };
+    if (%$submitted_invoices) {
+        $inv_where->{'me.invoicenumber'} =
+          { '-not_in' => [ keys %$submitted_invoices ] };
+    }
+    my $unsubmitted_invoices = Koha::Acquisition::Invoices->search( $inv_where,
+        { rows => 10, order_by => { -desc => 'me.closedate' } } );
+
+    # 2. Unsubmitted Cashups
+    my $submitted_cashups = $self->_get_submitted_cashup_ids();
+    my @cashup_where = ( timestamp => { '>=', $thirty_days_ago_iso } );
+    if (%$submitted_cashups) {
+        push @cashup_where,
+          ( id => { '-not_in' => [ keys %$submitted_cashups ] } );
+    }
+    my $unsubmitted_cashups =
+      Koha::Cash::Register::Cashups->search( {@cashup_where},
+        { rows => 10, order_by => { -desc => 'timestamp' } } );
+
     my $template = $self->get_template( { file => 'report-step1.tt' } );
     $template->param(
-        startdate => $startdate,
-        enddate   => $enddate,
+        startdate             => $startdate,
+        enddate               => $enddate,
+        last_cron_run         => $self->retrieve_data('last_cron_run'),
+        unsubmitted_invoices  => $unsubmitted_invoices,
+        unsubmitted_cashups   => $unsubmitted_cashups,
+        unsubmitted_inv_count => $unsubmitted_invoices->count,
+        unsubmitted_cs_count  => $unsubmitted_cashups->count,
     );
 
     $self->output_html( $template->output() );
@@ -449,7 +507,7 @@ sub _generate_report {
     my ( $self, $startdate, $enddate, $type, $filename, $exclude_submitted ) = @_;
     if ( $type eq 'income' ) {
         return $self->_generate_income_report( $startdate, $enddate,
-            $filename );
+            $filename, $exclude_submitted );
     }
     elsif ( $type eq 'invoices' ) {
         return $self->_generate_invoices_report( $startdate, $enddate,
@@ -823,8 +881,9 @@ sub _get_original_debit_type_from_refund {
 }
 
 sub _generate_income_report {
-    my ( $self, $startdate, $enddate, $filename ) = @_;
+    my ( $self, $startdate, $enddate, $filename, $exclude_submitted ) = @_;
 
+    $self->{_processed_cashups} = [];
     # TEMPORARY DATA FIXES - Apply before report generation
     # These fixes address core Koha bugs that haven't been backported yet
     $self->_apply_temporary_data_fixes();
@@ -871,6 +930,13 @@ sub _generate_income_report {
           { '<=', $dtf->format_datetime($end_dt) };
     }
 
+    if ($exclude_submitted) {
+        my $submitted = $self->_get_submitted_cashup_ids();
+        if (%$submitted) {
+            $cashup_conditions->{id} = { '-not_in' => [ keys %$submitted ] };
+        }
+    }
+
     # Query all cashups within date range (across all registers)
     my $cashups = Koha::Cash::Register::Cashups->search( $cashup_conditions,
         { order_by => { '-asc' => [ 'timestamp', 'id' ] } } );
@@ -885,6 +951,7 @@ sub _generate_income_report {
 
     # Process each cashup session
     while ( my $cashup = $cashups->next ) {
+        push @{ $self->{_processed_cashups} }, $cashup->id;
 
         # Get accountlines for this cashup session
         my $session_accountlines = $cashup->accountlines();
@@ -1487,6 +1554,30 @@ sub _get_submitted_invoice_numbers {
     return { map { $_->{invoicenumber} => 1 } @$rows };
 }
 
+sub _get_submitted_cashup_ids {
+    my ($self) = @_;
+    my $dbh  = C4::Context->dbh;
+    my $rows = $dbh->selectall_arrayref(
+        'SELECT cashup_id FROM plugin_oracle_submitted_cashups',
+        { Slice => {} }
+    );
+    return { map { $_->{cashup_id} => 1 } @$rows };
+}
+
+sub _mark_cashups_submitted {
+    my ( $self, $cashup_ids, $filename, $by ) = @_;
+    return unless $cashup_ids && @$cashup_ids;
+    my $dbh = C4::Context->dbh;
+    my $sth = $dbh->prepare(
+        'INSERT IGNORE INTO plugin_oracle_submitted_cashups
+         (cashup_id, submitted_at, submitted_by, filename)
+         VALUES (?, NOW(), ?, ?)'
+    );
+    for my $id (@$cashup_ids) {
+        $sth->execute( $id, $by // 'cron', $filename );
+    }
+}
+
 sub _mark_invoices_submitted {
     my ( $self, $invoice_numbers, $filename, $by ) = @_;
     return unless $invoice_numbers && @$invoice_numbers;
@@ -1504,30 +1595,45 @@ sub _mark_invoices_submitted {
 sub manage_submissions {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
+    my $dbh = C4::Context->dbh;
 
     if ( ( $cgi->param('action') // '' ) eq 'clear' ) {
-        my @to_clear = $cgi->multi_param('invoicenumber');
-        if (@to_clear) {
-            my $dbh          = C4::Context->dbh;
-            my $placeholders = join( ',', ('?') x @to_clear );
+        my @invoices_to_clear = $cgi->multi_param('invoicenumber');
+        if (@invoices_to_clear) {
+            my $placeholders = join( ',', ('?') x @invoices_to_clear );
             $dbh->do(
-                "DELETE FROM plugin_oracle_submitted_invoices WHERE invoicenumber IN ($placeholders)",
-                undef, @to_clear
+"DELETE FROM plugin_oracle_submitted_invoices WHERE invoicenumber IN ($placeholders)",
+                undef, @invoices_to_clear
+            );
+        }
+        my @cashups_to_clear = $cgi->multi_param('cashup_id');
+        if (@cashups_to_clear) {
+            my $placeholders = join( ',', ('?') x @cashups_to_clear );
+            $dbh->do(
+"DELETE FROM plugin_oracle_submitted_cashups WHERE cashup_id IN ($placeholders)",
+                undef, @cashups_to_clear
             );
         }
     }
 
-    my $dbh  = C4::Context->dbh;
-    my $rows = $dbh->selectall_arrayref(
+    my $submitted_invoices = $dbh->selectall_arrayref(
         'SELECT invoicenumber, submitted_at, submitted_by, filename
          FROM plugin_oracle_submitted_invoices
          ORDER BY submitted_at DESC',
         { Slice => {} }
     );
 
+    my $submitted_cashups = $dbh->selectall_arrayref(
+        'SELECT cashup_id, submitted_at, submitted_by, filename
+         FROM plugin_oracle_submitted_cashups
+         ORDER BY submitted_at DESC',
+        { Slice => {} }
+    );
+
     my $template = $self->get_template( { file => 'manage-submissions.tt' } );
     $template->param(
-        submitted_invoices => $rows,
+        submitted_invoices => $submitted_invoices,
+        submitted_cashups  => $submitted_cashups,
         CLASS              => ref($self),
     );
     $self->output_html( $template->output() );

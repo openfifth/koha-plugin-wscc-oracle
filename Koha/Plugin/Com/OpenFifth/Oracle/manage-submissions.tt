@@ -5,7 +5,7 @@
 [% SET footerjs = 1 %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>[% FILTER collapse %]
-    [% t("Submitted Invoices") | html %] &rsaquo;
+    [% t("Submitted Records") | html %] &rsaquo;
     [% t("Oracle Finance Integration") | html %] &rsaquo;
     [% t("Plugins") | html %] &rsaquo;
     [% t("Koha") | html %]
@@ -23,7 +23,7 @@
             <a href="/cgi-bin/koha/tools/tools-home.pl">Tools</a>
         [% END %]
         [% WRAPPER breadcrumb_item bc_active= 1 %]
-            <span>Submitted Invoices</span>
+            <span>Submitted Records</span>
         [% END %]
     [% END #/ WRAPPER breadcrumbs %]
 [% END #/ WRAPPER sub-header.inc %]
@@ -32,18 +32,20 @@
     <div class="row">
         <div class="col-md-10 order-md-2 order-sm-1">
             <main>
-                <h1>Submitted Invoices</h1>
+                <h1>Submitted Records</h1>
+
                 <div class="page-section">
+                    <h2>Submitted Invoices</h2>
                     [% IF submitted_invoices.size %]
                     <p>The following invoices have been successfully submitted to Oracle. Select invoices and click <strong>Allow resubmission</strong> to remove them from the submitted list.</p>
-                    <form method="get" action="/cgi-bin/koha/plugins/run.pl">
+                    <form method="get" action="/cgi-bin/koha/plugins/run.pl" id="invoices_form">
                         <input type="hidden" name="class" value="[% CLASS | html %]"/>
                         <input type="hidden" name="method" value="tool"/>
                         <input type="hidden" name="action" value="clear"/>
-                        <table class="table table-bordered table-sm">
+                        <table class="table table-bordered table-sm" id="invoices_table">
                             <thead>
                                 <tr>
-                                    <th><input type="checkbox" id="select-all" title="Select all"/></th>
+                                    <th><input type="checkbox" id="select-all-invoices" title="Select all"/></th>
                                     <th>Invoice Number</th>
                                     <th>Submitted At</th>
                                     <th>Submitted By</th>
@@ -63,12 +65,53 @@
                             </tbody>
                         </table>
                         <fieldset class="action">
-                            <input type="submit" class="btn btn-warning" value="Allow resubmission"/>
+                            <input type="submit" class="btn btn-warning" value="Allow resubmission of selected invoices"/>
                         </fieldset>
                     </form>
                     [% ELSE %]
                     <div class="alert alert-info">
                         No invoices have been submitted yet.
+                    </div>
+                    [% END %]
+                </div>
+
+                <div class="page-section">
+                    <h2>Submitted Cashups (Income)</h2>
+                    [% IF submitted_cashups.size %]
+                    <p>The following cashup sessions have been successfully submitted to Oracle. Select sessions and click <strong>Allow resubmission</strong> to remove them from the submitted list.</p>
+                    <form method="get" action="/cgi-bin/koha/plugins/run.pl" id="cashups_form">
+                        <input type="hidden" name="class" value="[% CLASS | html %]"/>
+                        <input type="hidden" name="method" value="tool"/>
+                        <input type="hidden" name="action" value="clear"/>
+                        <table class="table table-bordered table-sm" id="cashups_table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="select-all-cashups" title="Select all"/></th>
+                                    <th>Cashup ID</th>
+                                    <th>Submitted At</th>
+                                    <th>Submitted By</th>
+                                    <th>Filename</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                [% FOREACH cashup IN submitted_cashups %]
+                                <tr>
+                                    <td><input type="checkbox" name="cashup_id" value="[% cashup.cashup_id | html %]"/></td>
+                                    <td>[% cashup.cashup_id | html %]</td>
+                                    <td>[% cashup.submitted_at | html %]</td>
+                                    <td>[% cashup.submitted_by | html %]</td>
+                                    <td>[% cashup.filename | html %]</td>
+                                </tr>
+                                [% END %]
+                            </tbody>
+                        </table>
+                        <fieldset class="action">
+                            <input type="submit" class="btn btn-warning" value="Allow resubmission of selected cashups"/>
+                        </fieldset>
+                    </form>
+                    [% ELSE %]
+                    <div class="alert alert-info">
+                        No cashups have been submitted yet.
                     </div>
                     [% END %]
                 </div>
@@ -83,8 +126,14 @@
 
 <script>
 $(document).ready(function() {
-    $('#select-all').change(function() {
+    $('#select-all-invoices').change(function() {
         $('input[name="invoicenumber"]').prop('checked', $(this).is(':checked'));
     });
+    $('#select-all-cashups').change(function() {
+        $('input[name="cashup_id"]').prop('checked', $(this).is(':checked'));
+    });
+
+    // Handle combined submission if needed (though forms are separate above)
+    // Actually, separate forms are cleaner.
 });
 </script>

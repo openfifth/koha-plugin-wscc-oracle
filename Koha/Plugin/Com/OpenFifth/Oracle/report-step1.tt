@@ -34,22 +34,50 @@
         <div class="col-md-10 order-md-2 order-sm-1">
             <main>
                 <h1>Generate Oracle Report</h1>
+
+                [% IF last_cron_run %]
+                    <div class="alert alert-info">
+                        Last successful automated run: <strong>[% last_cron_run | $KohaDates with_hours => 1 %]</strong>
+                    </div>
+                [% ELSE %]
+                    <div class="alert alert-warning">
+                        No successful automated runs recorded yet.
+                    </div>
+                [% END %]
+
+                [% IF unsubmitted_inv_count > 0 || unsubmitted_cs_count > 0 %]
+                    <div class="alert alert-danger">
+                        <h3><i class="fa fa-exclamation-triangle"></i> Gaps detected in processed records</h3>
+                        <p>The following records from the last 30 days have not been marked as submitted:</p>
+                        <ul>
+                            [% IF unsubmitted_inv_count > 0 %]
+                                <li><strong>[% unsubmitted_inv_count | html %]</strong> unsubmitted invoices found.</li>
+                            [% END %]
+                            [% IF unsubmitted_cs_count > 0 %]
+                                <li><strong>[% unsubmitted_cs_count | html %]</strong> unsubmitted cashup sessions found.</li>
+                            [% END %]
+                        </ul>
+                        <p>You can view already submitted records in the <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | html %]&method=tool">Submission Manager</a>.</p>
+                    </div>
+                [% END %]
+
                 <form method="get">
                     <input type="hidden" name="class" value="[% CLASS %]"/>
                     <input type="hidden" name="method" value="[% METHOD %]"/>
                     <fieldset class="rows">
 						<legend>Dates</legend>
-                        <li>
-                            <label for="from" class="required"> Date from:</label>
-                            <input type="text" size="10" id="from" name="from" value="[% startdate | $KohaDates date_format => 'iso' %]" class="flatpickr" data-date_to="to" required="required"/>
-                            <span class="required">Required</span>
-                        </li>
-                        <li>
-                            <label for="to" class="required"> Date to:</label>
-                            <input type="text" size="10" id="to" name="to" value="[% enddate | $KohaDates date_format => 'iso' %]" class="flatpickr" required="required"/>
-                            <span class="required">Required</span>
-                        </li>
-                    </ol>
+                        <ol>
+                            <li>
+                                <label for="from" class="required"> Date from:</label>
+                                <input type="text" size="10" id="from" name="from" value="[% startdate | $KohaDates date_format => 'iso' %]" class="flatpickr" data-date_to="to" required="required"/>
+                                <span class="required">Required</span>
+                            </li>
+                            <li>
+                                <label for="to" class="required"> Date to:</label>
+                                <input type="text" size="10" id="to" name="to" value="[% enddate | $KohaDates date_format => 'iso' %]" class="flatpickr" required="required"/>
+                                <span class="required">Required</span>
+                            </li>
+                        </ol>
                     </fieldset>
                     <fieldset class="rows">
 						<legend>Output</legend>

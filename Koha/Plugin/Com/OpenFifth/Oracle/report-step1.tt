@@ -35,9 +35,27 @@
             <main>
                 <h1>Generate Oracle Report</h1>
 
-                [% IF last_cron_run %]
+                [% IF last_run %]
                     <div class="alert alert-info">
-                        Last successful automated run: <strong>[% last_cron_run | $KohaDates with_hours => 1 %]</strong>
+                        <p>Last automated run: <strong>[% last_run.run_at | $KohaDates with_hours => 1 %]</strong>
+                        ([% IF last_run.status == 'success' %]
+                            [% IF last_run.income_found || last_run.invoices_found %]
+                                Success: Records found and processed
+                            [% ELSE %]
+                                Success: Nothing to process
+                            [% END %]
+                        [% ELSE %]
+                            <span class="text-danger">Failed</span>
+                        [% END %])
+                        </p>
+                        
+                        [% IF last_run_with_results && last_run_with_results.run_at != last_run.run_at %]
+                            <p>Last run with results: <strong>[% last_run_with_results.run_at | $KohaDates with_hours => 1 %]</strong></p>
+                        [% END %]
+                    </div>
+                [% ELSIF last_cron_run %]
+                    <div class="alert alert-info">
+                        Last successful automated run (legacy): <strong>[% last_cron_run | $KohaDates with_hours => 1 %]</strong>
                     </div>
                 [% ELSE %]
                     <div class="alert alert-warning">

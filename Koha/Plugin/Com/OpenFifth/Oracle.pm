@@ -76,6 +76,16 @@ sub install {
           UNIQUE KEY `unique_cashup_id` (`cashup_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     });
+    $dbh->do(q{
+        CREATE TABLE IF NOT EXISTS `plugin_oracle_cron_runs` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `run_at` datetime NOT NULL,
+          `income_found` tinyint(1) NOT NULL DEFAULT 0,
+          `invoices_found` tinyint(1) NOT NULL DEFAULT 0,
+          `status` varchar(255) NOT NULL,
+          PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    });
     return 1;
 }
 
@@ -84,6 +94,7 @@ sub uninstall {
     my $dbh = C4::Context->dbh;
     $dbh->do(q{ DROP TABLE IF EXISTS `plugin_oracle_submitted_invoices` });
     $dbh->do(q{ DROP TABLE IF EXISTS `plugin_oracle_submitted_cashups` });
+    $dbh->do(q{ DROP TABLE IF EXISTS `plugin_oracle_cron_runs` });
     return 1;
 }
 
@@ -303,6 +314,8 @@ sub cronjob_nightly {
     # Generate both income and invoices reports
     my @report_types = ( 'income', 'invoices' );
     my $all_success  = 1;
+    my $income_found = 0;
+    my $invoices_found = 0;
 
     for my $type (@report_types) {
         my $filename          = $self->_generate_filename($type);
@@ -310,29 +323,15 @@ sub cronjob_nightly {
         my $report =
           $self->_generate_report( $start_date, $end_date, $type, $filename, $exclude_submitted );
 
-        next unless $report;
+        if ($report) {
+            $income_found = 1 if $type eq 'income';
+            $invoices_found = 1 if $type eq 'invoices';
+        } else {
+            next;
+        }
 
         if ( $output eq 'upload' ) {
-
-            # Get configured upload directory for this report type
-            my $upload_dir =
-                $type eq 'income'
-              ? $self->retrieve_data('upload_dir_income')
-              : $self->retrieve_data('upload_dir_invoices');
-
-            # Construct upload path (directory + filename)
-            my $upload_path = $filename;
-            if ( $upload_dir && $upload_dir =~ /\S/ ) {
-
-                # Remove leading/trailing slashes and ensure proper format
-                $upload_dir =~ s{^/+}{};
-                $upload_dir =~ s{/+$}{};
-                $upload_path =
-                  $upload_dir ? "$upload_dir/$filename" : $filename;
-            }
-
-            $transport->connect;
-            open my $fh, '<', \$report;
+...
             if ( $transport->upload_file( $fh, $upload_path ) ) {
                 close $fh;
                 if ( $type eq 'invoices' ) {
@@ -368,6 +367,17 @@ sub cronjob_nightly {
         $self->store_data(
             { last_cron_run => dt_from_string()->strftime('%Y-%m-%d %H:%M:%S') }
         );
+        $self->_add_cron_run_log({
+            income_found => $income_found,
+            invoices_found => $invoices_found,
+            status => 'success'
+        });
+    } else {
+        $self->_add_cron_run_log({
+            income_found => $income_found,
+            invoices_found => $invoices_found,
+            status => 'failed'
+        });
     }
 
     return $all_success;
@@ -418,17 +428,30 @@ sub report_step1 {
     if (%$submitted_cashups) {
         push @cashup_where,
           ( id => { '-not_in' => [ keys %$submitted_cashups ] } );
-    }
     my $unsubmitted_cashups =
       Koha::Cash::Register::Cashups->search( {@cashup_where},
         { rows => 10, order_by => { -desc => 'timestamp' } } );
+
+    my $last_run = $dbh->selectrow_hashref(
+        'SELECT * FROM plugin_oracle_cron_runs
+         ORDER BY run_at DESC LIMIT 1'
+    );
+
+    my $last_run_with_results = $dbh->selectrow_hashref(
+        'SELECT * FROM plugin_oracle_cron_runs
+         WHERE income_found = 1 OR invoices_found = 1
+         ORDER BY run_at DESC LIMIT 1'
+    );
 
     my $template = $self->get_template( { file => 'report-step1.tt' } );
     $template->param(
         startdate             => $startdate,
         enddate               => $enddate,
         last_cron_run         => $self->retrieve_data('last_cron_run'),
+        last_run              => $last_run,
+        last_run_with_results => $last_run_with_results,
         unsubmitted_invoices  => $unsubmitted_invoices,
+    ...
         unsubmitted_cashups   => $unsubmitted_cashups,
         unsubmitted_inv_count => $unsubmitted_invoices->count,
         unsubmitted_cs_count  => $unsubmitted_cashups->count,
@@ -1592,6 +1615,20 @@ sub _mark_invoices_submitted {
     for my $inv (@$invoice_numbers) {
         $sth->execute( $inv, $by // 'cron', $filename );
     }
+}
+
+sub _add_cron_run_log {
+    my ( $self, $args ) = @_;
+    my $dbh = C4::Context->dbh;
+    $dbh->do(
+        'INSERT INTO plugin_oracle_cron_runs
+         (run_at, income_found, invoices_found, status)
+         VALUES (NOW(), ?, ?, ?)',
+        undef,
+        $args->{income_found}   // 0,
+        $args->{invoices_found} // 0,
+        $args->{status}         // 'success'
+    );
 }
 
 sub manage_submissions {

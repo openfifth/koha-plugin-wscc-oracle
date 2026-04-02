@@ -331,7 +331,27 @@ sub cronjob_nightly {
         }
 
         if ( $output eq 'upload' ) {
-...
+            # Get configured upload directory for this report type
+            my $upload_dir = $type eq 'income'
+                ? $self->retrieve_data('upload_dir_income')
+                : $self->retrieve_data('upload_dir_invoices');
+
+            # Construct upload path (directory + filename)
+            my $upload_path = $filename;
+            if ($upload_dir && $upload_dir =~ /\S/) {
+                # Remove leading/trailing slashes and ensure single trailing slash
+                $upload_dir =~ s{^/+}{};
+                $upload_dir =~ s{/+$}{};
+                $upload_path = $upload_dir ? "$upload_dir/$filename" : $filename;
+            }
+
+            # Connect to SFTP
+            unless ($transport->connect) {
+                $all_success = 0;
+                next;
+            }
+
+            open my $fh, '<', \$report;
             if ( $transport->upload_file( $fh, $upload_path ) ) {
                 close $fh;
                 if ( $type eq 'invoices' ) {
@@ -451,7 +471,6 @@ sub report_step1 {
         last_run              => $last_run,
         last_run_with_results => $last_run_with_results,
         unsubmitted_invoices  => $unsubmitted_invoices,
-    ...
         unsubmitted_cashups   => $unsubmitted_cashups,
         unsubmitted_inv_count => $unsubmitted_invoices->count,
         unsubmitted_cs_count  => $unsubmitted_cashups->count,

@@ -448,6 +448,7 @@ sub report_step1 {
     if (%$submitted_cashups) {
         push @cashup_where,
           ( id => { '-not_in' => [ keys %$submitted_cashups ] } );
+    }
     my $unsubmitted_cashups =
       Koha::Cash::Register::Cashups->search( {@cashup_where},
         { rows => 10, order_by => { -desc => 'timestamp' } } );

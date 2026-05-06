@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Gap Detection**: The Report tool now identifies and alerts users to unsubmitted invoices or cashup sessions from the last 30 days.
 - **Enhanced Submission Manager**: Updated the "Manage Submissions" tool to allow viewing and clearing both submitted invoices and cashup sessions.
 - **Smart Cron Processing**: Nightly cron job now automatically excludes previously submitted records for both income and invoices to prevent duplicates.
+- New integration test (`t/01-oracle-integration.t`) covering filename generation, plugin metadata, presence of the public/private surface area (install/uninstall/upgrade, manage_submissions, invoice and cashup submission helpers, etc.), config persistence, acquisitions field defaults fall-through, and vendor mapping resolution.
 
 ### Changed
 

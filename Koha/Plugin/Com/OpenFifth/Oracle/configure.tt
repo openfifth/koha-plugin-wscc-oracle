@@ -12,6 +12,35 @@
  <script type="text/javascript" src="[% PLUGIN_PATH %]/datepicker/js/datepicker.js"></script>
  <link href="[% PLUGIN_PATH %]/datepicker/css/datepicker.css" rel="stylesheet" type="text/css" />
 [% INCLUDE 'doc-head-close.inc' %]
+<style>
+    fieldset.transport-subfieldset {
+        margin-top: 1em;
+        padding: 0.5em 1em 1em;
+        border: 1px solid #e0e0e0;
+        background: #fafafa;
+    }
+    fieldset.transport-subfieldset > legend {
+        width: auto;
+        padding: 0 0.5em;
+        font-size: 1em;
+        font-weight: bold;
+        border: 0;
+        margin-bottom: 0;
+    }
+    .run-days-inline {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 0.75em;
+        vertical-align: middle;
+    }
+    .run-days-inline label.inline {
+        margin: 0;
+        white-space: nowrap;
+    }
+    .run-days-inline label.inline input {
+        margin-right: 0.25em;
+    }
+</style>
 </head>
 <body id="plugins_rbkc_oracle" class="plugins">
 [% WRAPPER 'header.inc' %]
@@ -49,59 +78,77 @@
                     <input type="hidden" name="class" value="[% CLASS %]"/>
                     <input type="hidden" name="method" value="[% METHOD %]"/>
                     <fieldset class="rows">
-                        <legend>Report Generation Settings</legend>
+                        <legend>Output &amp; Transport</legend>
                         <ol>
                             <li>
-                                <label for="output">Output to:</label>
-                                <select name="output">
+                                <label for="report_output">Output to:</label>
+                                <select name="output" id="report_output">
                                     <option value=""></option>
                                     <option value="file" [% IF output == 'file' %]selected[% END %]>Local file</option>
                                     <option value="upload" [% IF output == 'upload' %]selected[% END %]>Upload</option>
                                 </select>
+                                <div class="hint">
+                                    <strong>Local file:</strong> the plugin writes the Oracle file to a directory on the Koha server. A server administrator is expected to configure a local (S)FTP service (jailed to that directory) so the third party can <em>pull</em> files at their convenience. The Transport settings below are <strong>not used</strong> in this mode.<br />
+                                    <strong>Upload:</strong> the plugin actively <em>pushes</em> the Oracle file to the third party's (S)FTP server using the Transport settings below.
+                                </div>
                             </li>
                         </ol>
-                        <h4>Scheduled Run Days</h4>
-                        <div class="hint">Select which days the automated report generation should run.</div>
-                        <ol>
-                            <li><input type="checkbox" name="days" value="0" [% IF transport_days.sunday %]checked[% END %]><label> Sunday</label></li>
-                            <li><input type="checkbox" name="days" value="1" [% IF transport_days.monday %]checked[% END %]><label> Monday</label></li>
-                            <li><input type="checkbox" name="days" value="2" [% IF transport_days.tuesday %]checked[% END %]><label> Tuesday</label></li>
-                            <li><input type="checkbox" name="days" value="3" [% IF transport_days.wednesday %]checked[% END %]><label> Wednesday</label></li>
-                            <li><input type="checkbox" name="days" value="4" [% IF transport_days.thursday %]checked[% END %]><label> Thursday</label></li>
-                            <li><input type="checkbox" name="days" value="5" [% IF transport_days.friday %]checked[% END %]><label> Friday</label></li>
-                            <li><input type="checkbox" name="days" value="6" [% IF transport_days.saturday %]checked[% END %]><label> Saturday</label></li>
-                        </ol>
-                        <h4>SFTP Upload Configuration</h4>
-                        [% IF available_transports.count %]
-                        <ol>
-                            <li>
-                                <label for="transport_server">(S)FTP server to transfer to:</label>
-                                <select name="transport_server">
-                                [% FOREACH transport IN available_transports %]
-                                    [% IF transport.id == transport_server %]
-                                    <option value="[% transport.id %]" selected>[% transport.name %]</option>
-                                    [% ELSE %]
-                                    <option value="[% transport.id %]">[% transport.name %]</option>
+                        <fieldset id="transport_fieldset" class="transport-subfieldset"[% IF output == 'file' %] disabled[% END %]>
+                            <legend>Transport</legend>
+                            [% IF output == 'file' %]
+                            <div class="alert alert-info">
+                                <strong>Not used in &quot;Local file&quot; mode.</strong> When Output is set to <em>Local file</em>, the plugin writes the Oracle file locally and does not push it anywhere. Configure a local (S)FTP server jailed to the output directory so the third party can pull files instead.
+                            </div>
+                            [% END %]
+                            [% IF available_transports.count %]
+                            <ol>
+                                <li>
+                                    <label for="transport_server">(S)FTP server to transfer to:</label>
+                                    <select name="transport_server" id="transport_server">
+                                        <option value=""[% UNLESS transport_server %] selected[% END %]>-- None --</option>
+                                    [% FOREACH transport IN available_transports %]
+                                        [% IF transport.id == transport_server %]
+                                        <option value="[% transport.id %]" selected>[% transport.name %]</option>
+                                        [% ELSE %]
+                                        <option value="[% transport.id %]">[% transport.name %]</option>
+                                        [% END %]
                                     [% END %]
-                                [% END %]
-                                </select>
-                            </li>
+                                    </select>
+                                </li>
+                                <li>
+                                    <label for="upload_dir_income">Upload directory for income reports:</label>
+                                    <input type="text" name="upload_dir_income" id="upload_dir_income" value="[% upload_dir_income %]" size="50" />
+                                    <span class="hint">Optional: Specify a directory path for income reports (e.g., /income or income/). Leave empty to upload to the server's default directory.</span>
+                                </li>
+                                <li>
+                                    <label for="upload_dir_invoices">Upload directory for invoice reports:</label>
+                                    <input type="text" name="upload_dir_invoices" id="upload_dir_invoices" value="[% upload_dir_invoices %]" size="50" />
+                                    <span class="hint">Optional: Specify a directory path for invoice reports (e.g., /invoices or invoices/). Leave empty to upload to the server's default directory.</span>
+                                </li>
+                            </ol>
+                            [% ELSE %]
+                            <div class="alert alert-info">
+                                No transports found, would you like to <a href="/cgi-bin/koha/admin/sftp_servers.pl?op=add_form">add</a> one?
+                            </div>
+                            [% END %]
+                        </fieldset>
+                    </fieldset>
+                    <fieldset class="rows">
+                        <legend>Run days</legend>
+                        <ol>
                             <li>
-                                <label for="upload_dir_income">Upload directory for income reports:</label>
-                                <input type="text" name="upload_dir_income" value="[% upload_dir_income %]" size="50" />
-                                <span class="hint">Optional: Specify a directory path for income reports (e.g., /income or income/). Leave empty to upload to the server's default directory.</span>
-                            </li>
-                            <li>
-                                <label for="upload_dir_invoices">Upload directory for invoice reports:</label>
-                                <input type="text" name="upload_dir_invoices" value="[% upload_dir_invoices %]" size="50" />
-                                <span class="hint">Optional: Specify a directory path for invoice reports (e.g., /invoices or invoices/). Leave empty to upload to the server's default directory.</span>
+                                <span class="run-days-inline">
+                                    <label class="inline"><input type="checkbox" name="days" value="0" [% IF transport_days.sunday %]checked[% END %]> Sun</label>
+                                    <label class="inline"><input type="checkbox" name="days" value="1" [% IF transport_days.monday %]checked[% END %]> Mon</label>
+                                    <label class="inline"><input type="checkbox" name="days" value="2" [% IF transport_days.tuesday %]checked[% END %]> Tue</label>
+                                    <label class="inline"><input type="checkbox" name="days" value="3" [% IF transport_days.wednesday %]checked[% END %]> Wed</label>
+                                    <label class="inline"><input type="checkbox" name="days" value="4" [% IF transport_days.thursday %]checked[% END %]> Thu</label>
+                                    <label class="inline"><input type="checkbox" name="days" value="5" [% IF transport_days.friday %]checked[% END %]> Fri</label>
+                                    <label class="inline"><input type="checkbox" name="days" value="6" [% IF transport_days.saturday %]checked[% END %]> Sat</label>
+                                </span>
+                                <div class="hint">Days of the week the nightly cron will run.</div>
                             </li>
                         </ol>
-                        [% ELSE %]
-                        <div class="alert alert-info">
-                            No transports found, would you like to <a href="/cgi-bin/koha/admin/sftp_servers.pl?op=add_form">add</a> one?
-                        </div>
-                        [% END %]
                     </fieldset>
                     <fieldset class="rows">
                         <legend>Acquisitions Mappings</legend>
@@ -321,5 +368,22 @@
             <aside></aside>
         </div>
     </div>
+
+[% MACRO jsinclude BLOCK %]
+    <script>
+        (function () {
+            var output = document.getElementById('report_output');
+            var fieldset = document.getElementById('transport_fieldset');
+            if (!output || !fieldset) return;
+            function syncTransport() {
+                var isFile = output.value === 'file';
+                fieldset.disabled = isFile;
+                fieldset.style.opacity = isFile ? '0.5' : '';
+            }
+            output.addEventListener('change', syncTransport);
+            syncTransport();
+        })();
+    </script>
+[% END %]
 
 [% INCLUDE 'intranet-bottom.inc' %]

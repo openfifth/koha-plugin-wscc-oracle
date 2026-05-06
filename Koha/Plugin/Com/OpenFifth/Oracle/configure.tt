@@ -42,7 +42,7 @@
     }
 </style>
 </head>
-<body id="plugins_rbkc_oracle" class="plugins">
+<body id="plugins_wscc_oracle" class="plugins">
 [% WRAPPER 'header.inc' %]
     [% INCLUDE 'cat-search.inc' %]
 [% END %]

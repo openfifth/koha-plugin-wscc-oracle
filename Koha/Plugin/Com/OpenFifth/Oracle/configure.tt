@@ -74,7 +74,7 @@
                     <p><strong>Important:</strong> Oracle Finance requires valid COA combinations. Invalid combinations will cause "COA combination errors" during import. Ensure all code combinations are pre-approved in your Oracle system before use.</p>
                 </div>
 
-                <form method="get">
+                <form method="post">
                     <input type="hidden" name="class" value="[% CLASS %]"/>
                     <input type="hidden" name="method" value="[% METHOD %]"/>
                     <fieldset class="rows">

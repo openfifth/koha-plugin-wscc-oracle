@@ -106,7 +106,7 @@ sub upload {
             unless ($connect_result) {
                 my $error_detail = $c->_extract_transport_error($transport, 'connection');
                 return $c->render(
-                    status => 502,
+                    status => 424,
                     openapi => {
                         success => Mojo::JSON->false,
                         message => "SFTP connection failed: " . $error_detail->{message},
@@ -139,7 +139,7 @@ sub upload {
             } else {
                 my $error_detail = $c->_extract_transport_error($transport, 'upload');
                 return $c->render(
-                    status => 502,
+                    status => 424,
                     openapi => {
                         success => Mojo::JSON->false,
                         message => "SFTP upload failed: " . $error_detail->{message},
@@ -151,7 +151,7 @@ sub upload {
 
         if ($@) {
             return $c->render(
-                status => 502,
+                status => 424,
                 openapi => {
                     success => Mojo::JSON->false,
                     message => "SFTP upload exception: $@"

@@ -335,15 +335,10 @@ sub cronjob_nightly {
             my $upload_dir = $type eq 'income'
                 ? $self->retrieve_data('upload_dir_income')
                 : $self->retrieve_data('upload_dir_invoices');
-
-            # Construct upload path (directory + filename)
-            my $upload_path = $filename;
-            if ($upload_dir && $upload_dir =~ /\S/) {
-                # Remove leading/trailing slashes and ensure single trailing slash
-                $upload_dir =~ s{^/+}{};
-                $upload_dir =~ s{/+$}{};
-                $upload_path = $upload_dir ? "$upload_dir/$filename" : $filename;
-            }
+            $upload_dir //= '';
+            $upload_dir =~ s{/+$}{};    # trim trailing slashes (cosmetic);
+                                        # leading slash is preserved so the
+                                        # operator decides absolute vs relative
 
             # Connect to SFTP
             unless ($transport->connect) {
@@ -351,8 +346,17 @@ sub cronjob_nightly {
                 next;
             }
 
+            # Set the remote working directory explicitly via the public
+            # change_directory() API. Portable across 24.11 and newer.
+            if ( $upload_dir ne ''
+                && !$transport->change_directory($upload_dir) )
+            {
+                $all_success = 0;
+                next;
+            }
+
             open my $fh, '<', \$report;
-            if ( $transport->upload_file( $fh, $upload_path ) ) {
+            if ( $transport->upload_file( $fh, $filename ) ) {
                 close $fh;
                 if ( $type eq 'invoices' ) {
                     $self->_mark_invoices_submitted( $self->{_processed_invoices}, $filename, 'cron' );

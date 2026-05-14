@@ -90,15 +90,10 @@ sub upload {
         my $upload_dir = $type eq 'income'
             ? $plugin->retrieve_data('upload_dir_income')
             : $plugin->retrieve_data('upload_dir_invoices');
-
-        # Construct upload path (directory + filename)
-        my $upload_path = $filename;
-        if ($upload_dir && $upload_dir =~ /\S/) {
-            # Remove leading/trailing slashes and ensure single trailing slash
-            $upload_dir =~ s{^/+}{};
-            $upload_dir =~ s{/+$}{};
-            $upload_path = $upload_dir ? "$upload_dir/$filename" : $filename;
-        }
+        $upload_dir //= '';
+        $upload_dir =~ s{/+$}{};    # trim trailing slashes (cosmetic);
+                                    # leading slash is preserved so the
+                                    # operator decides absolute vs relative
 
         # Upload to SFTP
         eval {
@@ -115,8 +110,27 @@ sub upload {
                 );
             }
 
+            # Set the remote working directory explicitly via the public
+            # change_directory() API. This is portable across the 24.11
+            # transport API (no options-hash on upload_file) and newer.
+            if ( $upload_dir ne ''
+                && !$transport->change_directory($upload_dir) )
+            {
+                my $error_detail =
+                  $c->_extract_transport_error($transport, 'change_directory');
+                return $c->render(
+                    status => 424,
+                    openapi => {
+                        success => Mojo::JSON->false,
+                        message => "Failed to change to upload directory '$upload_dir': "
+                                 . $error_detail->{message},
+                        error_detail => $error_detail
+                    }
+                );
+            }
+
             open my $fh, '<', \$report;
-            my $upload_result = $transport->upload_file( $fh, $upload_path );
+            my $upload_result = $transport->upload_file( $fh, $filename );
             close $fh;
 
             if ($upload_result) {

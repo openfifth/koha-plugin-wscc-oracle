@@ -45,6 +45,11 @@ sub upload {
         );
     }
 
+    # TO is exclusive: the actual scanned window ends the day before the
+    # user-selected TO date, mirroring the report UI labels ("Closed on
+    # or after" / "Closed before") and the cron's day-granular window.
+    my $effective_enddate = $enddate->clone->subtract( days => 1 );
+
     # Validate type
     unless ($type && ($type eq 'income' || $type eq 'invoices')) {
         return $c->render(
@@ -74,7 +79,7 @@ sub upload {
 
         # Generate report
         my $filename = $plugin->_generate_filename($type);
-        my $report = $plugin->_generate_report( $startdate, $enddate, $type, $filename, $exclude );
+        my $report = $plugin->_generate_report( $startdate, $effective_enddate, $type, $filename, $exclude );
 
         unless ($report) {
             return $c->render(
@@ -175,7 +180,7 @@ sub upload {
     } else {
         # Save to local file
         my $filename = $plugin->_generate_filename($type);
-        my $report = $plugin->_generate_report( $startdate, $enddate, $type, $filename, $exclude );
+        my $report = $plugin->_generate_report( $startdate, $effective_enddate, $type, $filename, $exclude );
 
         unless ($report) {
             return $c->render(

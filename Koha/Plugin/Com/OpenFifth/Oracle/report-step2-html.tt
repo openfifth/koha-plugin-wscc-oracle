@@ -67,7 +67,7 @@
                 [% IF type == 'income' %]
                     <h1>Oracle Income Report - Results - [% date_ran | $KohaDates %]</h1>
                     <div class="page-section">
-                        <p>Report for income transactions between [% startdate | $KohaDates %] and [% enddate | $KohaDates %]</p>
+                        <p>Report for income transactions dated on or after [% startdate | $KohaDates %] and dated before [% enddate | $KohaDates %] (scanned range: [% startdate | $KohaDates %] to [% effective_enddate | $KohaDates %] inclusive).</p>
                         [%- IF results -%]
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <div>
@@ -109,7 +109,7 @@
                 [% ELSE %]
                     <h1>Oracle Acquisitions Report - Results - [% date_ran | $KohaDates %]</h1>
                     <div class="page-section">
-                        <p>Report for invoices closed between [% startdate | $KohaDates %] and [% enddate | $KohaDates %]</p>
+                        <p>Report for invoices closed on or after [% startdate | $KohaDates %] and closed before [% enddate | $KohaDates %] (scanned range: [% startdate | $KohaDates %] to [% effective_enddate | $KohaDates %] inclusive).</p>
                         [%- IF results -%]
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <div>

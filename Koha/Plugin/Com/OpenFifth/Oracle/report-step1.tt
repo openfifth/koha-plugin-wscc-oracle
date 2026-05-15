@@ -84,14 +84,17 @@
                     <input type="hidden" name="method" value="[% METHOD %]"/>
                     <fieldset class="rows">
 						<legend>Dates</legend>
+                        <p class="hint">
+                            The report includes every record whose <strong>date</strong> (invoice close date or cashup session date) is on or after the <em>after</em> date and strictly <em>before</em> the <em>before</em> date. Dates are whole days &mdash; no time component &mdash; and the <em>before</em> date is itself excluded, so picking <em>today</em> as the before date will capture everything up to the end of yesterday and nothing from today. This matches how the nightly cron picks its window, so a manual run with these two dates produces the same window the cron would scan.
+                        </p>
                         <ol>
                             <li>
-                                <label for="from" class="required"> Date from:</label>
+                                <label for="from" class="required"> Dated on or after:</label>
                                 <input type="text" size="10" id="from" name="from" value="[% startdate | $KohaDates date_format => 'iso' %]" class="flatpickr" data-date_to="to" required="required"/>
                                 <span class="required">Required</span>
                             </li>
                             <li>
-                                <label for="to" class="required"> Date to:</label>
+                                <label for="to" class="required"> Dated before:</label>
                                 <input type="text" size="10" id="to" name="to" value="[% enddate | $KohaDates date_format => 'iso' %]" class="flatpickr" required="required"/>
                                 <span class="required">Required</span>
                             </li>

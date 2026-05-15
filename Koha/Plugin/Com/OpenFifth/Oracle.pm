@@ -295,21 +295,30 @@ sub cronjob_nightly {
         return unless $transport;
     }
 
-    # Find start date (previous selected day) and end date (today)
-    my $previous_day =
-      max( grep { $_ < $today } @selected_days );   # Last selected before today
-    $previous_day //=
-      $selected_days[-1];    # Wrap around to last one from previous week
+    # Work out how many days back the previous scheduled run was. Records
+    # dated *today* are excluded because the cron typically runs in the
+    # early hours and any records dated later in the day would otherwise
+    # be missed entirely (the next run starts from the day after today).
+    my $prev_in_week = max( grep { $_ < $today } @selected_days );
+    my $days_since_prev;
+    if ( defined $prev_in_week ) {
+        $days_since_prev = $today - $prev_in_week;
+    }
+    else {
+        # No earlier scheduled day this week -- wrap to the last selected
+        # day in the previous week. For a single-day schedule this means
+        # the previous run was exactly seven days ago.
+        $days_since_prev = ( $today - $selected_days[-1] ) % 7;
+        $days_since_prev ||= 7;
+    }
 
-    # Calculate the start date (day after previous selected day) and end date (today).
-    # We add 1 day so the range is (previous_run_day, today] rather than
-    # [previous_run_day, today], preventing invoices on the boundary date from
-    # appearing in two consecutive runs.
-    my $now = DateTime->now;
-    my $start_date =
-      $now->clone->subtract( days => ( $today - $previous_day ) % 7 )
-                 ->add( days => 1 );
-    my $end_date = $now;
+    # Build a day-granular inclusive window [previous_selected_day, yesterday].
+    # Truncate to the day so the in-memory range matches the date-only
+    # SQL semantics in _generate_report (datetime_parser->format_date
+    # drops any time component).
+    my $today_dt   = dt_from_string()->truncate( to => 'day' );
+    my $start_date = $today_dt->clone->subtract( days => $days_since_prev );
+    my $end_date   = $today_dt->clone->subtract( days => 1 );
 
     # Generate both income and invoices reports
     my @report_types = ( 'income', 'invoices' );
@@ -506,9 +515,16 @@ sub report_step2 {
         $enddate = eval { dt_from_string($enddate) };
     }
 
+    # The TO input is exclusive: the report covers records dated on or
+    # after FROM and *before* TO. Shift the effective end back by one
+    # day so the SQL window lines up with the cron's day-granular
+    # [start, end] inclusive semantics.
+    my $effective_enddate =
+      $enddate ? $enddate->clone->subtract( days => 1 ) : undef;
+
     my $filename = $self->_generate_filename($type);
     my $results =
-      $self->_generate_report( $startdate, $enddate, $type, $filename, $exclude );
+      $self->_generate_report( $startdate, $effective_enddate, $type, $filename, $exclude );
 
     my $templatefile;
 
@@ -524,14 +540,15 @@ sub report_step2 {
     my $template = $self->get_template( { file => $templatefile } );
 
     $template->param(
-        date_ran  => dt_from_string(),
-        startdate => dt_from_string($startdate),
-        enddate   => dt_from_string($enddate),
-        results   => $results,
-        type      => $type,
-        exclude   => $exclude,
-        filename  => $filename,
-        CLASS     => ref($self),
+        date_ran          => dt_from_string(),
+        startdate         => $startdate,
+        enddate           => $enddate,
+        effective_enddate => $effective_enddate,
+        results           => $results,
+        type              => $type,
+        exclude           => $exclude,
+        filename          => $filename,
+        CLASS             => ref($self),
     );
 
     print $template->output();

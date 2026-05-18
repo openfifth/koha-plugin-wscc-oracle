@@ -630,128 +630,88 @@ sub _generate_invoices_report {
         $results = "";
         open my $fh, '>', \$results or die "Could not open scalar ref: $!";
 
-        # Start with header line matching new client requirements
+        # Header line matches the 15-field Oracle CSV schema
         my @header_line =
           qw(INVOICE_NUMBER INVOICE_TOTAL INVOICE_DATE SUPPLIER_NUMBER CONTRACT_NUMBER SHIPMENT_DATE LINE_AMOUNT TAX_AMOUNT TAX_CODE DESCRIPTION COST_CENTRE OBJECTIVE SUBJECTIVE SUBANALYSIS LIN_NUM);
-        my $worked = $csv->print( $fh, \@header_line );
+        $csv->print( $fh, \@header_line );
 
         while ( my $invoice = $invoices->next ) {
             $invoice_count++;
             push @{ $self->{_processed_invoices} }, $invoice->invoicenumber;
-            my $invoice_total = 0;
-            my $orders        = $invoice->_result->aqorders;
 
-            # Calculate invoice total first
-            my @orderlines;
-            my $line_count = 0;
+            my $orders = $invoice->_result->aqorders;
+
+            # Build line records in memory first so INVOICE_TOTAL is the
+            # exact sum of what we emit, not a parallel calculation that
+            # could drift via per-line rounding.
+            my @invoice_lines;
             while ( my $line = $orders->next ) {
-                $line_count++;
-
-                # Unit price - always use tax-excluded value since
-                # TAX_AMOUNT is sent as a separate field
-                my $unitprice_tax_excluded =
-                  Koha::Number::Price->new( $line->unitprice_tax_excluded )
-                  ->round;
-                my $quantity = $line->quantity || 1;
-
-                # Tax - tax_value_on_receiving is the TOTAL tax for the
-                # entire order line (all units), so divide by quantity
-                # to get per-unit tax
-                my $tax_value_on_receiving =
-                  Koha::Number::Price->new( $line->tax_value_on_receiving )
-                  ->round;
-                my $tax_per_unit =
-                  Koha::Number::Price->new( $tax_value_on_receiving / $quantity )
-                  ->round;
-
-                # Invoice total: unitprice_tax_excluded * qty + total tax
-                # (tax_value_on_receiving already covers all units)
-                $invoice_total += ( $unitprice_tax_excluded * $quantity ) +
-                  $tax_value_on_receiving;
-                my $tax_rate_on_receiving = $line->tax_rate_on_receiving * 100;
-                my $tax_code =
-                    $tax_rate_on_receiving == 20 ? 'STANDARD'
-                  : $tax_rate_on_receiving == 0  ? 'ZERO'
-                  :                                '*UNMAPPED*';
-
-                # Get budget code for mappings
-                my $budget_code = $line->budget->budget_code;
-
-                # Get item description (fallback to generic if not available)
-                my $description = "Library Materials";
-                if ( my $biblio = $line->biblio ) {
-                    $description = $biblio->title || $description;
-                }
-
-                # Line record: INVOICE_NUMBER, then empty fields for header
-                # data, then line-specific data
-                # Line amounts are positive (matching header convention)
-                for my $qty_unit ( 1 .. $quantity ) {
-                    push @orderlines, [
-                        $invoice->invoicenumber,        # INVOICE_NUMBER
-                        "",    # INVOICE_TOTAL (empty for line)
-                        "",    # INVOICE_DATE (empty for line)
-                        "",    # SUPPLIER_NUMBER (empty for line)
-                        "",    # CONTRACT_NUMBER (empty for line)
-                        "",    # SHIPMENT_DATE (empty for line)
-                        sprintf( "%.2f", $unitprice_tax_excluded ),  # LINE_AMOUNT (tax-excluded)
-                        sprintf( "%.2f", $tax_per_unit )
-                        ,                               # TAX_AMOUNT (per unit)
-                        $tax_code,                      # TAX_CODE
-                        $description,                   # DESCRIPTION
-                        $self->_get_acquisitions_costcenter($budget_code)
-                        ,                               # COST_CENTRE
-                        $self->_get_acquisitions_objective($budget_code)
-                        ,                               # OBJECTIVE
-                        $self->_get_acquisitions_subjective($budget_code)
-                        ,                               # SUBJECTIVE
-                        $self->_get_acquisitions_subanalysis($budget_code)
-                        ,                               # SUBANALYSIS
-                        $line_count++                   # LIN_NUM
-                    ];
-                }
+                push @invoice_lines, $self->_invoice_orderlines($line);
             }
 
-            # Get supplier number and contract number from vendor mappings
+            # INVOICE_TOTAL = Sum(LINE_AMOUNT) + Sum(TAX_AMOUNT) over the
+            # emitted rows, rounded to 2dp once. Computed from the same
+            # values Oracle parses from the CSV, so the header equals
+            # the sum of the line records by construction. This removes
+            # the rounding-aggregation drift that caused Bolinda 525275
+            # and Askews 7281289 to be rejected.
+            my $invoice_total =
+              $self->_invoice_total_from_rows( \@invoice_lines );
+
             my $vendor_id = $invoice->booksellerid;
             my $supplier_number =
               $self->_get_vendor_supplier_number($vendor_id);
             my $contract_number =
               $self->_get_vendor_contract_number($vendor_id);
 
-            # Format invoice total as positive for header record
-            $invoice_total = sprintf( "%.2f", $invoice_total );
-
-            # Build header record with new format (15 fields)
-            # Header record: INVOICE_NUMBER, INVOICE_TOTAL,
-            # INVOICE_DATE, SUPPLIER_NUMBER,
-            # CONTRACT_NUMBER, SHIPMENT_DATE, then empty fields
+            # Header record: fields 1-6 populated, 7-15 empty
             $csv->print(
                 $fh,
                 [
-                    $invoice->invoicenumber,    # INVOICE_NUMBER
-                    $invoice_total,             # INVOICE_TOTAL
-                    $self->_format_oracle_date( $invoice->billingdate )
-                    ,                           # INVOICE_DATE
-                    $supplier_number,           # SUPPLIER_NUMBER
-                    $contract_number,           # CONTRACT_NUMBER
-                    $self->_format_oracle_date( $invoice->shipmentdate )
-                    ,                           # SHIPMENT_DATE
-                    "",                         # LINE_AMOUNT (empty for header)
-                    "",                         # TAX_AMOUNT (empty for header)
-                    "",                         # TAX_CODE (empty for header)
-                    "",                         # DESCRIPTION (empty for header)
-                    "",                         # COST_CENTRE (empty for header)
-                    "",                         # OBJECTIVE (empty for header)
-                    "",                         # SUBJECTIVE (empty for header)
-                    "",                         # SUBANALYSIS (empty for header)
-                    ""                          # LIN_NUM (empty for header)
+                    $invoice->invoicenumber,                              # INVOICE_NUMBER
+                    sprintf( "%.2f", $invoice_total ),                    # INVOICE_TOTAL
+                    $self->_format_oracle_date( $invoice->billingdate ),  # INVOICE_DATE
+                    $supplier_number,                                     # SUPPLIER_NUMBER
+                    $contract_number,                                     # CONTRACT_NUMBER
+                    $self->_format_oracle_date( $invoice->shipmentdate ), # SHIPMENT_DATE
+                    "",                                                   # LINE_AMOUNT (empty for header)
+                    "",                                                   # TAX_AMOUNT (empty for header)
+                    "",                                                   # TAX_CODE (empty for header)
+                    "",                                                   # DESCRIPTION (empty for header)
+                    "",                                                   # COST_CENTRE (empty for header)
+                    "",                                                   # OBJECTIVE (empty for header)
+                    "",                                                   # SUBJECTIVE (empty for header)
+                    "",                                                   # SUBANALYSIS (empty for header)
+                    "",                                                   # LIN_NUM (empty for header)
                 ]
             );
 
-            # Print all line records for this invoice
-            for my $line (@orderlines) {
-                $csv->print( $fh, $line );
+            # Line records: field 1 populated, 2-6 empty, 7-15 populated.
+            # LIN_NUM is a strictly sequential 1..N counter within the
+            # invoice (the previous post-increment placement skipped
+            # numbers between orderlines).
+            my $line_count = 0;
+            for my $row (@invoice_lines) {
+                $csv->print(
+                    $fh,
+                    [
+                        $invoice->invoicenumber,                                   # INVOICE_NUMBER
+                        "",                                                        # INVOICE_TOTAL (empty for line)
+                        "",                                                        # INVOICE_DATE (empty for line)
+                        "",                                                        # SUPPLIER_NUMBER (empty for line)
+                        "",                                                        # CONTRACT_NUMBER (empty for line)
+                        "",                                                        # SHIPMENT_DATE (empty for line)
+                        sprintf( "%.2f", $row->{line_amount} ),                    # LINE_AMOUNT (tax-excluded)
+                        sprintf( "%.2f", $row->{tax_amount} ),                     # TAX_AMOUNT (per unit)
+                        $row->{tax_code},                                          # TAX_CODE
+                        $row->{description},                                       # DESCRIPTION
+                        $self->_get_acquisitions_costcenter( $row->{fund_code} ),  # COST_CENTRE
+                        $self->_get_acquisitions_objective( $row->{fund_code} ),   # OBJECTIVE
+                        $self->_get_acquisitions_subjective( $row->{fund_code} ),  # SUBJECTIVE
+                        $self->_get_acquisitions_subanalysis( $row->{fund_code} ), # SUBANALYSIS
+                        ++$line_count,                                             # LIN_NUM
+                    ]
+                );
             }
         }
 
@@ -759,6 +719,64 @@ sub _generate_invoices_report {
     }
 
     return $results;
+}
+
+# Map a tax rate percentage (e.g. 20, 0) to its Oracle tax code.
+sub _invoice_tax_code {
+    my ( $self, $tax_rate_pct ) = @_;
+    return
+        $tax_rate_pct == 20 ? 'STANDARD'
+      : $tax_rate_pct == 0  ? 'ZERO'
+      :                       '*UNMAPPED*';
+}
+
+# Per-line records for an acquisitions orderline. Returns one row hash
+# per quantity unit. TAX_AMOUNT is derived from round(LINE_AMOUNT * rate)
+# rather than tax_value_on_receiving so the rate-line-tax triangle is
+# internally consistent at the 2dp precision Oracle parses.
+sub _invoice_orderlines {
+    my ( $self, $line ) = @_;
+
+    my $unitprice =
+      Koha::Number::Price->new( $line->unitprice_tax_excluded )->round + 0;
+    my $tax_rate_pct = $line->tax_rate_on_receiving * 100;
+    my $tax_amount =
+      Koha::Number::Price->new( $unitprice * $tax_rate_pct / 100 )->round + 0;
+    my $tax_code = $self->_invoice_tax_code($tax_rate_pct);
+
+    my $description = "Library Materials";
+    if ( my $biblio = $line->biblio ) {
+        $description = $biblio->title || $description;
+    }
+    my $fund_code = $line->budget->budget_code;
+    my $quantity  = $line->quantity || 1;
+
+    my @rows;
+    for ( 1 .. $quantity ) {
+        push @rows,
+          {
+            line_amount => $unitprice,
+            tax_amount  => $tax_amount,
+            tax_code    => $tax_code,
+            description => $description,
+            fund_code   => $fund_code,
+          };
+    }
+    return @rows;
+}
+
+# INVOICE_TOTAL = exact sum of LINE_AMOUNT + TAX_AMOUNT across rows,
+# rounded to 2dp. Operates on the same hash structure emitted into the
+# CSV, so the returned total always equals the sum of the rendered
+# lines, with no floating-point or per-line aggregation drift.
+sub _invoice_total_from_rows {
+    my ( $self, $rows ) = @_;
+
+    my $total = 0;
+    for my $r (@$rows) {
+        $total += ( $r->{line_amount} || 0 ) + ( $r->{tax_amount} || 0 );
+    }
+    return Koha::Number::Price->new($total)->round + 0;
 }
 
 sub _get_acquisitions_costcenter {

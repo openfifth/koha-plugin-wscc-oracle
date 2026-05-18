@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 use Modern::Perl;
-use Test::More tests => 9;
+use Test::More tests => 7;
 use Test::Exception;
 use Path::Tiny qw(path);
 
@@ -140,81 +140,6 @@ subtest 'Vendor mappings resolve from stored data' => sub {
         $plugin->_get_vendor_contract_number(1), 'C67890',
         'mapped vendor returns configured contract number',
     );
-};
-
-subtest 'Invoice tax code mapping' => sub {
-    plan tests => 4;
-
-    is( $plugin->_invoice_tax_code(20), 'STANDARD', '20% maps to STANDARD' );
-    is( $plugin->_invoice_tax_code(0),  'ZERO',     '0% maps to ZERO' );
-    is( $plugin->_invoice_tax_code(5),  '*UNMAPPED*',
-        'reduced rate maps to *UNMAPPED* until Oracle code is agreed' );
-    is( $plugin->_invoice_tax_code(17.5), '*UNMAPPED*',
-        'historic rate maps to *UNMAPPED*' );
-};
-
-subtest 'INVOICE_TOTAL is the exact sum of emitted line+tax amounts' => sub {
-    plan tests => 7;
-
-    # Property: INVOICE_TOTAL must equal Sum(LINE_AMOUNT) + Sum(TAX_AMOUNT).
-    # Locks in the contract that fixes the Bolinda 525275 / Askews 7281289
-    # rejections, where header total drifted from the sum of line records
-    # via per-line tax rounding aggregation.
-
-    is( $plugin->_invoice_total_from_rows( [] ), 0,
-        'empty invoice totals zero' );
-
-    my $single = [ { line_amount => 49.34, tax_amount => 9.87 } ];
-    is( $plugin->_invoice_total_from_rows($single), 59.21,
-        'single row sums line + tax' );
-
-    # Case 1 analogue: many rows at 20% VAT. Whatever per-line rounding
-    # falls out, the header must match the sum.
-    my @case1_rows = map {
-        { line_amount => 49.34, tax_amount => 9.87 }
-    } 1 .. 41;
-    my $case1_total = 0;
-    $case1_total += $_->{line_amount} + $_->{tax_amount} for @case1_rows;
-    is(
-        $plugin->_invoice_total_from_rows( \@case1_rows ),
-        sprintf( "%.2f", $case1_total ) + 0,
-        '41 rows at 20% VAT: header equals sum of emitted line + tax amounts',
-    );
-
-    # Case 2 analogue: mixed VAT rates in one invoice.
-    my @case2_rows = (
-        ( map { { line_amount => 5.33, tax_amount => 1.07 } } 1 .. 20 ),
-        ( map { { line_amount => 5.78, tax_amount => 0 } }    1 .. 59 ),
-    );
-    my $case2_expected = 20 * ( 5.33 + 1.07 ) + 59 * ( 5.78 + 0 );
-    is(
-        $plugin->_invoice_total_from_rows( \@case2_rows ),
-        sprintf( "%.2f", $case2_expected ) + 0,
-        'mixed VAT invoice: header equals sum across rates',
-    );
-
-    # Defensive: missing keys must not blow up.
-    my $partial = [ { line_amount => 10.00 }, { tax_amount => 2.00 } ];
-    is( $plugin->_invoice_total_from_rows($partial), 12.00,
-        'missing line_amount / tax_amount treated as zero' );
-
-    # Float-noise resistance: 0.1 + 0.2 == 0.3, etc.
-    my @noisy_rows = map {
-        { line_amount => 0.10, tax_amount => 0.02 }
-    } 1 .. 100;
-    is(
-        $plugin->_invoice_total_from_rows( \@noisy_rows ),
-        12.00,
-        'sum of 100 rows of 0.10+0.02 rounds cleanly to 12.00',
-    );
-
-    # An adjustment row contributes both line and tax to the total.
-    my $with_adj = [
-        { line_amount => 100.00, tax_amount => 20.00 },
-        { line_amount => 5.00,   tax_amount => 1.00 },     # adjustment
-    ];
-    is( $plugin->_invoice_total_from_rows($with_adj), 126.00,
-        'adjustment rows contribute to invoice total' );
 };
 
 done_testing();

@@ -154,7 +154,7 @@ subtest 'Invoice tax code mapping' => sub {
 };
 
 subtest 'INVOICE_TOTAL is the exact sum of emitted line+tax amounts' => sub {
-    plan tests => 6;
+    plan tests => 7;
 
     # Property: INVOICE_TOTAL must equal Sum(LINE_AMOUNT) + Sum(TAX_AMOUNT).
     # Locks in the contract that fixes the Bolinda 525275 / Askews 7281289
@@ -207,6 +207,14 @@ subtest 'INVOICE_TOTAL is the exact sum of emitted line+tax amounts' => sub {
         12.00,
         'sum of 100 rows of 0.10+0.02 rounds cleanly to 12.00',
     );
+
+    # An adjustment row contributes both line and tax to the total.
+    my $with_adj = [
+        { line_amount => 100.00, tax_amount => 20.00 },
+        { line_amount => 5.00,   tax_amount => 1.00 },     # adjustment
+    ];
+    is( $plugin->_invoice_total_from_rows($with_adj), 126.00,
+        'adjustment rows contribute to invoice total' );
 };
 
 done_testing();

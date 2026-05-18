@@ -621,7 +621,8 @@ sub _generate_invoices_report {
     }
 
     my $invoices = Koha::Acquisition::Invoices->search( $where,
-        { prefetch => [ 'booksellerid', 'aqorders' ] } );
+        { prefetch => [ 'booksellerid', 'aqorders', 'aqinvoice_adjustments' ] }
+    );
 
     my $results;
     my $invoice_count = 0;
@@ -639,14 +640,54 @@ sub _generate_invoices_report {
             $invoice_count++;
             push @{ $self->{_processed_invoices} }, $invoice->invoicenumber;
 
-            my $orders = $invoice->_result->aqorders;
+            my $orders      = $invoice->_result->aqorders;
+            my $adjustments = $invoice->_result->aqinvoice_adjustments;
+
+            # Categorise adjustments: those that name an order in their
+            # note are interleaved after the matching orderline; the
+            # rest are emitted before any orderlines.
+            my @general_adjustments;
+            my %order_adjustments;
+            while ( my $adjustment = $adjustments->next ) {
+                my $note = $adjustment->note || '';
+                if ( $note =~ /Order #(\d+)/ ) {
+                    push @{ $order_adjustments{$1} }, $adjustment;
+                }
+                else {
+                    push @general_adjustments, $adjustment;
+                }
+            }
 
             # Build line records in memory first so INVOICE_TOTAL is the
             # exact sum of what we emit, not a parallel calculation that
             # could drift via per-line rounding.
             my @invoice_lines;
+
+            for my $adjustment (@general_adjustments) {
+                push @invoice_lines,
+                  $self->_invoice_adjustment_row($adjustment);
+            }
+
             while ( my $line = $orders->next ) {
                 push @invoice_lines, $self->_invoice_orderlines($line);
+
+                if ( my $adjs =
+                    delete $order_adjustments{ $line->ordernumber } )
+                {
+                    for my $adj (@$adjs) {
+                        push @invoice_lines,
+                          $self->_invoice_adjustment_row($adj);
+                    }
+                }
+            }
+
+            # Append any order-linked adjustments whose orderline did not
+            # appear in this invoice rather than silently dropping them.
+            for my $orphans ( values %order_adjustments ) {
+                for my $adj (@$orphans) {
+                    push @invoice_lines,
+                      $self->_invoice_adjustment_row($adj);
+                }
             }
 
             # INVOICE_TOTAL = Sum(LINE_AMOUNT) + Sum(TAX_AMOUNT) over the
@@ -763,6 +804,48 @@ sub _invoice_orderlines {
           };
     }
     return @rows;
+}
+
+# Build a single line record from an aqinvoice_adjustments row. Tax rate
+# is parsed from "Tax Rate: N%" in the adjustment note (matching how core
+# Koha stores it for EDI-imported adjustments); absence is treated as 0%.
+# The stored amount is taken tax-inclusive when CalculateFundValuesIncludingTax
+# is on, so we back-calculate the exclusive base before rounding.
+sub _invoice_adjustment_row {
+    my ( $self, $adjustment ) = @_;
+
+    my $note         = $adjustment->note || '';
+    my $tax_rate_pct = 0;
+    if ( $note =~ /Tax Rate:\s*(\d+(?:\.\d+)?)\s*%/ ) {
+        $tax_rate_pct = $1 + 0;
+    }
+
+    my $raw_amount = $adjustment->adjustment;
+    my $amount_excl =
+      ( C4::Context->preference('CalculateFundValuesIncludingTax')
+          && $tax_rate_pct > 0 )
+      ? $raw_amount / ( 1 + $tax_rate_pct / 100 )
+      : $raw_amount;
+
+    my $line_amount =
+      Koha::Number::Price->new($amount_excl)->round + 0;
+    my $tax_amount =
+      Koha::Number::Price->new( $line_amount * $tax_rate_pct / 100 )->round
+      + 0;
+
+    my $fund_code = '';
+    if ( $adjustment->budget_id ) {
+        my $fund = Koha::Acquisition::Funds->find( $adjustment->budget_id );
+        $fund_code = $fund ? $fund->budget_code : '';
+    }
+
+    return {
+        line_amount => $line_amount,
+        tax_amount  => $tax_amount,
+        tax_code    => $self->_invoice_tax_code($tax_rate_pct),
+        description => $note || "Invoice adjustment",
+        fund_code   => $fund_code,
+    };
 }
 
 # INVOICE_TOTAL = exact sum of LINE_AMOUNT + TAX_AMOUNT across rows,

@@ -1260,8 +1260,6 @@ sub _generate_income_report {
 
             # CASHUP_SURPLUS is typically out of scope for VAT
             my $vat_code = 'OUT OF SCOPE';
-            my ( $exclusive, $vat ) =
-              $self->_calculate_exclusive_and_vat( $amount, $vat_code );
 
             # Initialize aggregation structure
             $aggregated{$key} //= {
@@ -1271,13 +1269,12 @@ sub _generate_income_report {
                 debit_type_code   => 'CASHUP_SURPLUS',
                 payment_type      => $payment_type,
                 direction         => 'INCOME',
-                total_exclusive   => 0,
-                total_vat         => 0,
+                vat_code          => $vat_code,
+                total_inclusive   => 0,
             };
 
-            # Accumulate amounts
-            $aggregated{$key}{total_exclusive} += $exclusive;
-            $aggregated{$key}{total_vat}       += $vat;
+            # Accumulate raw inclusive amounts; split is computed once at output
+            $aggregated{$key}{total_inclusive} += $amount;
         }
 
         # Process CASHUP_DEFICIT transactions (cash shortages - negative income)
@@ -1296,12 +1293,6 @@ sub _generate_income_report {
 
             # CASHUP_DEFICIT is typically out of scope for VAT
             my $vat_code = 'OUT OF SCOPE';
-            my ( $exclusive, $vat ) =
-              $self->_calculate_exclusive_and_vat( $amount, $vat_code );
-
-            # Make amounts NEGATIVE (reducing income)
-            $exclusive = $exclusive * -1;
-            $vat       = $vat * -1;
 
             # Initialize aggregation structure
             $aggregated{$key} //= {
@@ -1311,13 +1302,12 @@ sub _generate_income_report {
                 debit_type_code   => 'CASHUP_DEFICIT',
                 payment_type      => $payment_type,
                 direction         => 'DEFICIT',
-                total_exclusive   => 0,
-                total_vat         => 0,
+                vat_code          => $vat_code,
+                total_inclusive   => 0,
             };
 
-            # Accumulate negative amounts
-            $aggregated{$key}{total_exclusive} += $exclusive;
-            $aggregated{$key}{total_vat}       += $vat;
+            # Accumulate raw inclusive amounts as negative (reducing income)
+            $aggregated{$key}{total_inclusive} -= $amount;
         }
 
         # Process INCOME offsets (existing logic with direction flag added)
@@ -1339,10 +1329,7 @@ sub _generate_income_report {
                 $credit_branch, $debit_branch, $credit_type,
                 $debit_type,    $payment_type, 'INCOME' );
 
-            # Calculate VAT for this individual offset
             my $vat_code = $self->_get_debit_type_vat_code($debit_type);
-            my ( $exclusive, $vat ) =
-              $self->_calculate_exclusive_and_vat( $offset_amount, $vat_code );
 
             # Initialize aggregation structure if needed
             $aggregated{$key} //= {
@@ -1352,13 +1339,12 @@ sub _generate_income_report {
                 debit_type_code   => $debit_type,
                 payment_type      => $payment_type,
                 direction         => 'INCOME',
-                total_exclusive   => 0,
-                total_vat         => 0,
+                vat_code          => $vat_code,
+                total_inclusive   => 0,
             };
 
-            # Accumulate exclusive and VAT amounts separately
-            $aggregated{$key}{total_exclusive} += $exclusive;
-            $aggregated{$key}{total_vat}       += $vat;
+            # Accumulate raw inclusive amounts; split is computed once at output
+            $aggregated{$key}{total_inclusive} += $offset_amount;
         }
 
         # Process PAYOUT offsets with NEGATIVE amounts (money leaving register)
@@ -1387,14 +1373,7 @@ sub _generate_income_report {
                 $payment_type, 'PAYOUT'    # Direction flag
             );
 
-            # Calculate VAT using original debit type's VAT code
             my $vat_code = $self->_get_debit_type_vat_code($original_debit_type);
-            my ( $exclusive, $vat ) =
-              $self->_calculate_exclusive_and_vat( $offset_amount, $vat_code );
-
-            # Make amounts NEGATIVE (money leaving register)
-            $exclusive = $exclusive * -1;
-            $vat       = $vat * -1;
 
             # Initialize aggregation structure
             $aggregated{$key} //= {
@@ -1404,13 +1383,12 @@ sub _generate_income_report {
                 debit_type_code   => $original_debit_type,
                 payment_type      => $payment_type,
                 direction         => 'PAYOUT',
-                total_exclusive   => 0,
-                total_vat         => 0,
+                vat_code          => $vat_code,
+                total_inclusive   => 0,
             };
 
-            # Accumulate negative amounts
-            $aggregated{$key}{total_exclusive} += $exclusive;
-            $aggregated{$key}{total_vat}       += $vat;
+            # Accumulate raw inclusive amounts as negative (money leaving register)
+            $aggregated{$key}{total_inclusive} -= $offset_amount;
         }
 
         # Convert aggregated hash to array for processing
@@ -1425,16 +1403,16 @@ sub _generate_income_report {
         # Process aggregated results for this cashup session
         for my $row (@income_summary) {
 
-            # Amounts already calculated with proper rounding per transaction
-            my $exclusive_amount = $row->{total_exclusive};
-            my $vat_amount       = $row->{total_vat};
+            # Compute exclusive/vat split on the group total (not per-line),
+            # avoiding rounding drift that accumulates when splitting per transaction.
+            my $total_inclusive = $row->{total_inclusive};
+            next if $total_inclusive == 0;
 
-            # Round aggregated totals to 2 decimal places
-            $exclusive_amount = sprintf( "%.2f", $exclusive_amount );
-            $vat_amount       = sprintf( "%.2f", $vat_amount );
-
-            # UPDATED: Allow negative amounts (payouts) but skip zero
-            next if $exclusive_amount == 0;    # Only skip zero amounts
+            my $sign = $total_inclusive >= 0 ? 1 : -1;
+            my ( $exclusive_amount, $vat_amount ) =
+              $self->_calculate_exclusive_and_vat( abs($total_inclusive), $row->{vat_code} );
+            $exclusive_amount = sprintf( "%.2f", $exclusive_amount * $sign );
+            $vat_amount       = sprintf( "%.2f", $vat_amount * $sign );
 
             my $credit_branch = $row->{credit_branchcode};
             my $debit_branch  = $row->{debit_branchcode};
@@ -1492,8 +1470,7 @@ sub _generate_income_report {
             my $subanalysis_offset =
               $self->retrieve_data('default_income_subanalysis_offset');
 
-            # Get VAT code for this debit type
-            my $vat_code = $self->_get_debit_type_vat_code($debit_type);
+            my $vat_code = $row->{vat_code};
 
             # Create line description based on transaction direction
             # Format varies by direction: INCOME, PAYOUT, or DEFICIT

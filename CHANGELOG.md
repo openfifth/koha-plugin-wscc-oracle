@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enhanced Submission Manager**: Updated the "Manage Submissions" tool to allow viewing and clearing both submitted invoices and cashup sessions.
 - **Smart Cron Processing**: Nightly cron job now automatically excludes previously submitted records for both income and invoices to prevent duplicates.
 - New integration test (`t/01-oracle-integration.t`) covering filename generation, plugin metadata, presence of the public/private surface area (install/uninstall/upgrade, manage_submissions, invoice and cashup submission helpers, etc.), config persistence, acquisitions field defaults fall-through, and vendor mapping resolution.
+- **EDI VAT Correction**: New `Oracle::EdiVatCorrector`, run via the `after_edi_cron` hook, detects mixed-rate EDI invoice lines that Koha's core ingest overtaxed (it only reads the first `TAX` segment on a `LIN` and ignores the vendor's actual `MOA+124` tax amount) and raises a `Koha::Acquisition::Invoice::Adjustment` for the difference, so both Koha's own invoice total and the Oracle export reflect the vendor's real figures. See Koha core Bug 43510. New test `t/02-edi-vat-corrector.t`.
 
 ### Changed
 
@@ -25,3 +26,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Configuration page: rename the Output select's id from `output` to `report_output` to avoid a CSS clash with an upstream Koha rule on `#output`
 - Replace stray `plugins_rbkc_oracle` body id copy-paste leftovers in the configure, report-step1 and report-step2 templates with the correct `plugins_wscc_oracle` id
+- Metadata `maximum_version` was still capped at `25.05.00.000`, triggering an "outdated plugin" warning on the plugins page now WSCC is on 25.11.o5th; raised to `25.11.00.000`

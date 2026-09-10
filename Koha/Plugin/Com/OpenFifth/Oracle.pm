@@ -29,7 +29,7 @@ our $metadata = {
     date_authored   => '2025-04-24',
     date_updated    => '2026-05-19',
     minimum_version => '24.11.00.000',
-    maximum_version => '25.05.00.000',
+    maximum_version => '25.11.00.000',
     version         => $VERSION,
     description     =>
       'A plugin to manage finance integration for WSCC with Oracle',

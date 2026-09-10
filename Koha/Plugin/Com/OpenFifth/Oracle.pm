@@ -103,6 +103,37 @@ sub upgrade {
     return $self->install();
 }
 
+=head3 after_edi_cron
+
+Fired by misc/cronjobs/edi_cron.pl once it has processed a batch of EDI
+messages. Checks the invoices created in this run for lines where the
+vendor's invoice expressed a mixed VAT rate (more than one TAX segment
+on a LIN) and Koha's EDI ingest collapsed it to a single flat rate,
+raising a compensating Koha::Acquisition::Invoice::Adjustment where it
+did. See Oracle::EdiVatCorrector for why this is done as an adjustment
+rather than a correction to aqorders itself.
+
+=cut
+
+sub after_edi_cron {
+    my ( $self, $args ) = @_;
+
+    my $invoice_ids = $args->{payload}->{invoice_ids} // [];
+    return unless @$invoice_ids;
+
+    require Koha::Plugin::Com::OpenFifth::Oracle::EdiVatCorrector;
+    require Koha::Acquisition::Invoices;
+
+    my $corrector = Koha::Plugin::Com::OpenFifth::Oracle::EdiVatCorrector->new;
+
+    for my $invoice_id (@$invoice_ids) {
+        my $invoice = Koha::Acquisition::Invoices->find($invoice_id) or next;
+        $corrector->run_for_invoice($invoice);
+    }
+
+    return 1;
+}
+
 sub tool {
     my ( $self, $args ) = @_;
     $self->install();
@@ -811,10 +842,31 @@ sub _invoice_orderlines {
 # Koha stores it for EDI-imported adjustments); absence is treated as 0%.
 # The stored amount is taken tax-inclusive when CalculateFundValuesIncludingTax
 # is on, so we back-calculate the exclusive base before rounding.
+#
+# An adjustment tagged "[Tax Correction]" (raised by
+# Oracle::EdiVatCorrector) is a pure VAT delta, not a priced item split
+# by a rate - the whole amount belongs in TAX_AMOUNT with nothing in
+# LINE_AMOUNT, so it is handled separately below.
 sub _invoice_adjustment_row {
     my ( $self, $adjustment ) = @_;
 
-    my $note         = $adjustment->note || '';
+    my $note = $adjustment->note || '';
+
+    if ( $note =~ /\[Tax Correction\]/ ) {
+        my $fund_code = '';
+        if ( $adjustment->budget_id ) {
+            my $fund = Koha::Acquisition::Funds->find( $adjustment->budget_id );
+            $fund_code = $fund ? $fund->budget_code : '';
+        }
+        return {
+            line_amount => 0,
+            tax_amount  => Koha::Number::Price->new( $adjustment->adjustment )->round + 0,
+            tax_code    => 'STANDARD',
+            description => $note,
+            fund_code   => $fund_code,
+        };
+    }
+
     my $tax_rate_pct = 0;
     if ( $note =~ /Tax Rate:\s*(\d+(?:\.\d+)?)\s*%/ ) {
         $tax_rate_pct = $1 + 0;

@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -15,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check out Koha
         run: |
@@ -83,7 +84,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -98,7 +99,7 @@ jobs:
 
       - name: Get Koha Version Branch Name
         id: koha-version-oldstable
-        uses: "bywatersolutions/github-action-koha-get-version-by-label@master"
+        uses: "bywatersolutions/github-action-koha-get-version-by-label@v2"
         with:
           version-label: "oldstable"
 
@@ -123,3 +124,23 @@ jobs:
             ${{ steps.kpz.outputs.filename }}
             CHANGELOG.md
           generate_release_notes: true
+
+  keepalive:
+    name: Keep Alive
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check age and push commit if needed
+        run: |
+          LAST_COMMIT=$( git --no-pager log -1 --format=%ct )
+          NOW=$(date +%s)
+          DIFF=$(($NOW-$LAST_COMMIT))
+          DAYS=$(($DIFF/86400))
+          if [ "$DAYS" -gt "50" ]; then
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git config --global user.name "github-actions[bot]"
+            git commit --allow-empty -m "Automated commit from keep alive workflow"
+            git push
+          fi

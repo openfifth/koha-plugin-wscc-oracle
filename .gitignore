@@ -11,3 +11,5 @@ regenerate_*.pl
 
 # Temporary analysis files
 DISCREPANCY_SUMMARY.md
+node_modules/
+*.kpz

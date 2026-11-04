@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Adopt the plugin template's CI and release tooling: `npm run release:*` scripts and preflight, `DEVELOPMENT.md`, a `t/00-load.t` smoke test and the GitHub Actions workflow (already current/customised, left as is).
+- Remove the legacy zip-based release tooling and committed build artefacts (`Koha/.DS_Store`, `Koha/Plugin/.DS_Store`, `release_kpz.sh`); KPZ files are now built by CI on release tags.
+
 - Relicensed under AGPL-3.0-or-later: added `LICENSE`, SPDX header, and `license`/`license_url` plugin metadata (the licence is also stated in the description, which is what Koha displays).
 
 - Configuration page: split the monolithic "Report Generation Settings" fieldset into "Output & Transport" (with Transport as a nested sub-fieldset) and a separate "Run days" fieldset; render Run days checkboxes horizontally; add a hint explaining Local file vs Upload modes
@@ -29,3 +32,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration page: rename the Output select's id from `output` to `report_output` to avoid a CSS clash with an upstream Koha rule on `#output`
 - Replace stray `plugins_rbkc_oracle` body id copy-paste leftovers in the configure, report-step1 and report-step2 templates with the correct `plugins_wscc_oracle` id
 - Metadata `maximum_version` was still capped at `25.05.00.000`, triggering an "outdated plugin" warning on the plugins page now WSCC is on 25.11.o5th; raised to `25.11.00.000`
+
+[Unreleased]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.1...HEAD

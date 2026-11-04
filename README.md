@@ -19,3 +19,7 @@ This plugin manages the generation and automated delivery of financial reports f
 2. **Automated Run**: The `cronjob_nightly` method should be scheduled to run daily via Koha's cron system.
 3. **Manual Reports**: Use the "Run Report" tool in the plugin menu to generate manual reports or catch up on missing gaps.
 4. **Resubmission**: If a record needs to be re-sent, use the "Manage Submissions" tool to clear its submission status.
+
+## Licence
+
+This plugin is licensed under the GNU Affero General Public License v3.0 or later (`AGPL-3.0-or-later`). See [LICENSE](LICENSE).

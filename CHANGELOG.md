@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Relicensed under AGPL-3.0-or-later: added `LICENSE`, SPDX header, and `license`/`license_url` plugin metadata (the licence is also stated in the description, which is what Koha displays).
+
 - Configuration page: split the monolithic "Report Generation Settings" fieldset into "Output & Transport" (with Transport as a nested sub-fieldset) and a separate "Run days" fieldset; render Run days checkboxes horizontally; add a hint explaining Local file vs Upload modes
 - Configuration page: add an explicit "-- None --" option to the Transport server select so an unconfigured state is no longer misrepresented by the first listed transport appearing selected by default
 - Configuration page: disable the Transport sub-fieldset when Output is set to "Local file", with an info banner clarifying that Transport settings are unused in that mode

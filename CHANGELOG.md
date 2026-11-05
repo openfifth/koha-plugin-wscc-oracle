@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-05
+
 ### Added
 - **Cashup Tracking**: New database table `plugin_oracle_submitted_cashups` to track successfully processed cashup sessions.
 - **Automated Run Tracking**: Plugin now records the timestamp of the `last_cron_run` upon successful completion of all reports.
@@ -33,4 +35,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace stray `plugins_rbkc_oracle` body id copy-paste leftovers in the configure, report-step1 and report-step2 templates with the correct `plugins_wscc_oracle` id
 - Metadata `maximum_version` was still capped at `25.05.00.000`, triggering an "outdated plugin" warning on the plugins page now WSCC is on 25.11.o5th; raised to `25.11.00.000`
 
-[Unreleased]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.1...v0.6.2

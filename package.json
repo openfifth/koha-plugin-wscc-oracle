@@ -6,7 +6,7 @@
     "module": "Koha::Plugin::Com::OpenFifth::Oracle",
     "pm_path": "Koha/Plugin/Com/OpenFifth/Oracle.pm"
   },
-  "version": "0.6.1",
+  "version": "0.6.2",
   "previous_version": "0.6.1",
   "scripts": {
     "version:patch": "node increment_version.js patch | cat",

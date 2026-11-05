@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Removed the `maximum_version` cap from plugin metadata. Koha's plugins page compares it as a string against the `Version` preference, so any 25.11.x point release (e.g. 25.11.05.x) sorted above `25.11.00.000` and still showed "written for an older version of Koha".
+
 ## [0.6.3] - 2026-11-05
 
 ### Fixed

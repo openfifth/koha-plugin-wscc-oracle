@@ -137,18 +137,15 @@ rather than a correction to aqorders itself.
 sub after_edi_cron {
     my ( $self, $args ) = @_;
 
-    my $invoice_ids = $args->{payload}->{invoice_ids} // [];
-    return unless @$invoice_ids;
+    # NB: despite the key name, edi_cron.pl passes EdifactMessage ids here
+    # (edifact_messages.id), not aqinvoices.invoiceid. Resolve them to the
+    # invoices created from those messages via aqinvoices.message_id.
+    my $message_ids = $args->{payload}->{invoice_ids} // [];
+    return unless @$message_ids;
 
     require Koha::Plugin::Com::OpenFifth::Oracle::EdiVatCorrector;
-    require Koha::Acquisition::Invoices;
 
-    my $corrector = Koha::Plugin::Com::OpenFifth::Oracle::EdiVatCorrector->new;
-
-    for my $invoice_id (@$invoice_ids) {
-        my $invoice = Koha::Acquisition::Invoices->find($invoice_id) or next;
-        $corrector->run_for_invoice($invoice);
-    }
+    Koha::Plugin::Com::OpenFifth::Oracle::EdiVatCorrector->new->run_for_message_ids($message_ids);
 
     return 1;
 }

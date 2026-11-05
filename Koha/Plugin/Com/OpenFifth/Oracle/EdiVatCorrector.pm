@@ -36,6 +36,7 @@ use Modern::Perl;
 use Koha::Edifact;
 use Koha::Number::Price;
 use Koha::Database;
+use Koha::Acquisition::Invoices;
 use Koha::Acquisition::Invoice::Adjustments;
 use Koha::Logger;
 
@@ -139,6 +140,30 @@ sub run_for_invoice {
     }
 
     return $result;
+}
+
+=head3 run_for_message_ids
+
+my $result = $corrector->run_for_message_ids( \@edifact_message_ids );
+
+Run L</run_for_invoice> for every invoice created from the given
+edifact_messages ids (matched via aqinvoices.message_id). This is what
+the after_edi_cron hook hands us: message ids, not invoice ids.
+
+=cut
+
+sub run_for_message_ids {
+    my ( $self, $message_ids ) = @_;
+
+    my $totals = { checked => 0, corrected => 0 };
+    return $totals unless $message_ids && @$message_ids;
+
+    my $invoices = Koha::Acquisition::Invoices->search( { message_id => { -in => $message_ids } } );
+    while ( my $invoice = $invoices->next ) {
+        my $r = $self->run_for_invoice($invoice);
+        $totals->{$_} += $r->{$_} for qw(checked corrected);
+    }
+    return $totals;
 }
 
 sub _adjustment_note {

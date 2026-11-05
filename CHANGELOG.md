@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Configuration changes are now written to Koha's action log (module `ORACLE_PLUGIN`, action `MODIFY`, visible in Tools > Log viewer). Each entry records the user and a JSON diff of old/new values for only the settings that changed; fund and vendor mapping tables are diffed per entry, and the transport name is included for readability. Saves that change nothing are not logged.
+
 ### Fixed
+- **Transport silently reset on save**: the Transport fieldset is `disabled` in the form when Output is "Local file", and browsers don't submit disabled controls, so saving the page in that mode stored an empty `transport_server` and upload directories (the same happened if no transports existed at the time). Switching back to "Upload" then showed "-- None --". Settings absent from the POST are now left untouched; an explicitly submitted empty value (choosing "-- None --") still clears them.
 - Removed the `maximum_version` cap from plugin metadata. Koha's plugins page compares it as a string against the `Version` preference, so any 25.11.x point release (e.g. 25.11.05.x) sorted above `25.11.00.000` and still showed "written for an older version of Koha".
 
 ## [0.6.3] - 2026-11-05

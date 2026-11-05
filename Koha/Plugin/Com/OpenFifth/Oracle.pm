@@ -36,6 +36,7 @@ use List::Util qw(min max);
 use Mojo::JSON qw{ decode_json encode_json };
 use Text::CSV  qw( csv );
 use C4::Context;
+use C4::Log qw( logaction );
 
 our $VERSION         = '0.6.3';
 
@@ -280,45 +281,100 @@ sub configure {
             }
         }
 
-        $self->store_data(
-            {
-                transport_server    => scalar $cgi->param('transport_server'),
-                transport_days      => $days_str,
-                output              => scalar $cgi->param('output'),
-                upload_dir_income   => scalar $cgi->param('upload_dir_income'),
-                upload_dir_invoices =>
-                  scalar $cgi->param('upload_dir_invoices'),
-                default_acquisitions_costcenter =>
-                  scalar $cgi->param('default_acquisitions_costcenter'),
-                default_acquisitions_objective =>
-                  scalar $cgi->param('default_acquisitions_objective'),
-                default_acquisitions_subjective =>
-                  scalar $cgi->param('default_acquisitions_subjective'),
-                default_acquisitions_subanalysis =>
-                  scalar $cgi->param('default_acquisitions_subanalysis'),
-                default_income_costcentre =>
-                  scalar $cgi->param('default_income_costcentre'),
-                default_branch_objective =>
-                  scalar $cgi->param('default_branch_objective'),
-                default_vat_code    => scalar $cgi->param('default_vat_code'),
-                default_subjective  => scalar $cgi->param('default_subjective'),
-                default_subanalysis =>
-                  scalar $cgi->param('default_subanalysis'),
-                default_income_costcentre_offset =>
-                  scalar $cgi->param('default_income_costcentre_offset'),
-                default_income_subjective_offset =>
-                  scalar $cgi->param('default_income_subjective_offset'),
-                default_income_subanalysis_offset =>
-                  scalar $cgi->param('default_income_subanalysis_offset'),
-                fund_field_mappings      => encode_json( \%fund_mappings ),
-                vendor_supplier_mappings =>
-                  encode_json( \%vendor_supplier_mappings ),
-                vendor_contract_mappings =>
-                  encode_json( \%vendor_contract_mappings )
-            }
+        # Scalar settings submitted by the form. A field that is absent from
+        # the POST is NOT the same as a field cleared by the user: the
+        # transport <fieldset> is disabled client-side in "Local file" mode
+        # (and omitted when no transports exist), and browsers do not submit
+        # disabled controls. Only store keys that were actually submitted so
+        # such a save cannot silently wipe the transport/upload directories.
+        my %submitted = map { $_ => 1 } @param_names;
+        my @scalar_keys   = qw(
+          transport_server output upload_dir_income upload_dir_invoices
+          default_acquisitions_costcenter default_acquisitions_objective
+          default_acquisitions_subjective default_acquisitions_subanalysis
+          default_income_costcentre default_branch_objective
+          default_vat_code default_subjective default_subanalysis
+          default_income_costcentre_offset default_income_subjective_offset
+          default_income_subanalysis_offset
         );
+
+        my %new_data = (
+            transport_days           => $days_str,
+            fund_field_mappings      => encode_json( \%fund_mappings ),
+            vendor_supplier_mappings => encode_json( \%vendor_supplier_mappings ),
+            vendor_contract_mappings => encode_json( \%vendor_contract_mappings ),
+        );
+        for my $key (@scalar_keys) {
+            $new_data{$key} = scalar $cgi->param($key) if $submitted{$key};
+        }
+
+        # Record who changed what before overwriting
+        $self->_audit_config_changes( \%new_data );
+
+        $self->store_data( \%new_data );
         $self->go_home();
     }
+}
+
+=head3 _audit_config_changes
+
+Compares the settings about to be saved with those currently stored and
+writes one action log entry (module C<ORACLE_PLUGIN>, action C<MODIFY>) per
+save that actually changes something, so deliberate or accidental
+configuration changes can be audited under Tools > Log viewer. The info
+column holds JSON of C<< { key => { old => ..., new => ... } } >>; the JSON
+mapping tables are diffed per entry. Failure to log never blocks a save.
+
+=cut
+
+sub _audit_config_changes {
+    my ( $self, $new_data ) = @_;
+
+    eval {
+        my %changes;
+        my %json_keys = map { $_ => 1 }
+          qw(fund_field_mappings vendor_supplier_mappings vendor_contract_mappings);
+
+        for my $key ( sort keys %$new_data ) {
+            my $old = $self->retrieve_data($key) // '';
+            my $new = $new_data->{$key}           // '';
+            next if $old eq $new;
+
+            if ( $json_keys{$key} ) {
+                my $o = eval { decode_json( $old || '{}' ) } || {};
+                my $n = eval { decode_json( $new || '{}' ) } || {};
+                for my $id ( sort keys %{ { %$o, %$n } } ) {
+                    my $ov = $o->{$id};
+                    my $nv = $n->{$id};
+                    next if Mojo::JSON::encode_json( [$ov] ) eq Mojo::JSON::encode_json( [$nv] );
+                    $changes{"$key.$id"} = { old => $ov, new => $nv };
+                }
+            }
+            else {
+                $changes{$key} = { old => $old, new => $new };
+            }
+        }
+        return 1 unless %changes;
+
+        # Resolve the transport name for readability in the log
+        if ( my $t = $changes{transport_server} ) {
+            for my $side (qw(old new)) {
+                next unless length( $t->{$side} // '' );
+                my $transport = Koha::File::Transports->find( $t->{$side} );
+                $t->{ $side . '_name' } = $transport->name if $transport;
+            }
+        }
+
+        my $userenv = C4::Context->userenv;
+        my $user    = ( ref $userenv eq 'HASH' ) ? $userenv->{number} : undef;
+        logaction(
+            'ORACLE_PLUGIN', 'MODIFY', $user // 0,
+            Mojo::JSON::encode_json( \%changes ),
+        );
+        1;
+    } or warn "Oracle plugin: failed to write configuration audit log: " . ( $@ || 'unknown error' );
+
+    return;
 }
 
 sub cronjob_nightly {

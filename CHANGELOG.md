@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-05
+
 ### Added
 - Failed nightly runs now record why: the transport error text (connect, change directory or upload) is stored in a new `message` column on `plugin_oracle_cron_runs` (added by `upgrade`/`install`), shown beside "Failed" on the report page, and written to stderr for cron mail. A missing or unconfigured transport is now logged as a failed run instead of returning silently.
 - Configuration changes are now written to Koha's action log (module `ORACLE_PLUGIN`, action `MODIFY`, visible in Tools > Log viewer). Each entry records the user and a JSON diff of old/new values for only the settings that changed; fund and vendor mapping tables are diffed per entry, and the transport name is included for readability. Saves that change nothing are not logged.
@@ -50,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace stray `plugins_rbkc_oracle` body id copy-paste leftovers in the configure, report-step1 and report-step2 templates with the correct `plugins_wscc_oracle` id
 - Metadata `maximum_version` was still capped at `25.05.00.000`, triggering an "outdated plugin" warning on the plugins page now WSCC is on 25.11.o5th; raised to `25.11.00.000`
 
-[Unreleased]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.1...v0.6.2

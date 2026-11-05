@@ -38,7 +38,7 @@ use Text::CSV  qw( csv );
 use C4::Context;
 use C4::Log qw( logaction );
 
-our $VERSION         = '0.6.3';
+our $VERSION         = '0.7.0';
 
 our $metadata = {
     name => 'Oracle Finance Integration',

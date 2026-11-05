@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-11-05
+
 ### Fixed
 - **EDI VAT Correction never ran**: `edi_cron.pl` passes `edifact_messages` ids in the `after_edi_cron` payload (`invoice_ids`), but the hook looked them up as `aqinvoices.invoiceid`. Message ids run ahead of invoice ids, so for recent messages nothing matched and no `[Tax Correction]` adjustment was ever raised. The hook now resolves message ids to invoices via `aqinvoices.message_id` (new `EdiVatCorrector::run_for_message_ids`). Invoices imported before this fix are not corrected retrospectively. New test `t/03-edi-vat-hook.t`; `t/02-edi-vat-corrector.t` gains a case for Askews partial-VAT lines with a bundled zero-rated servicing charge (`MOA+124`/`MOA+125`, `ALC+C`/`MOA+8`).
 
@@ -38,5 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace stray `plugins_rbkc_oracle` body id copy-paste leftovers in the configure, report-step1 and report-step2 templates with the correct `plugins_wscc_oracle` id
 - Metadata `maximum_version` was still capped at `25.05.00.000`, triggering an "outdated plugin" warning on the plugins page now WSCC is on 25.11.o5th; raised to `25.11.00.000`
 
-[Unreleased]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.1...v0.6.2

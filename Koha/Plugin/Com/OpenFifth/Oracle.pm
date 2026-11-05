@@ -103,9 +103,15 @@ sub install {
           `income_found` tinyint(1) NOT NULL DEFAULT 0,
           `invoices_found` tinyint(1) NOT NULL DEFAULT 0,
           `status` varchar(255) NOT NULL,
+          `message` text DEFAULT NULL,
           PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     });
+
+    # Tables created by earlier versions lack the failure message column
+    unless ( $dbh->selectrow_arrayref(q{SHOW COLUMNS FROM `plugin_oracle_cron_runs` LIKE 'message'}) ) {
+        $dbh->do(q{ALTER TABLE `plugin_oracle_cron_runs` ADD COLUMN `message` text DEFAULT NULL});
+    }
     return 1;
 }
 
@@ -390,12 +396,23 @@ sub cronjob_nightly {
     my $today = dt_from_string()->day_of_week % 7;
     return unless $selected_days{$today};
 
-    my $output = $self->retrieve_data('output');
+    my $output = $self->retrieve_data('output') // '';
     my $transport;
+    my @errors;
     if ( $output eq 'upload' ) {
-        $transport = Koha::File::Transports->find(
-            $self->retrieve_data('transport_server') );
-        return unless $transport;
+        my $transport_id = $self->retrieve_data('transport_server');
+        $transport = Koha::File::Transports->find($transport_id) if length( $transport_id // '' );
+        unless ($transport) {
+            $self->_add_cron_run_log(
+                {
+                    status  => 'failed',
+                    message => length( $transport_id // '' )
+                    ? "Configured transport (id $transport_id) no longer exists"
+                    : 'Output is set to Upload but no transport is configured',
+                }
+            );
+            return;
+        }
     }
 
     # Work out how many days back the previous scheduled run was. Records
@@ -422,6 +439,20 @@ sub cronjob_nightly {
     my $today_dt   = dt_from_string()->truncate( to => 'day' );
     my $start_date = $today_dt->clone->subtract( days => $days_since_prev );
     my $end_date   = $today_dt->clone->subtract( days => 1 );
+
+    # Self-heal after failures: if the last *successful* run is older than
+    # the normal window start, reach back to it (at most 30 days) so records
+    # from failed runs are retried. Already-submitted records are excluded
+    # by _generate_report, so this cannot produce duplicates.
+    if ( my $last_ok = $self->retrieve_data('last_cron_run') ) {
+        my $last_ok_dt = eval { dt_from_string( $last_ok ) };
+        if ($last_ok_dt) {
+            $last_ok_dt->truncate( to => 'day' );
+            my $floor = $today_dt->clone->subtract( days => 30 );
+            $last_ok_dt = $floor->clone if $last_ok_dt < $floor;
+            $start_date = $last_ok_dt    if $last_ok_dt < $start_date;
+        }
+    }
 
     # Generate both income and invoices reports
     my @report_types = ( 'income', 'invoices' );
@@ -455,6 +486,7 @@ sub cronjob_nightly {
             # Connect to SFTP
             unless ($transport->connect) {
                 $all_success = 0;
+                push @errors, "$type: " . $self->_transport_error_text( $transport, 'connect' );
                 next;
             }
 
@@ -464,6 +496,7 @@ sub cronjob_nightly {
                 && !$transport->change_directory($upload_dir) )
             {
                 $all_success = 0;
+                push @errors, "$type: " . $self->_transport_error_text( $transport, 'change_directory' ) . " (directory '$upload_dir')";
                 next;
             }
 
@@ -481,6 +514,7 @@ sub cronjob_nightly {
                 # Upload failed for this report type
                 close $fh;
                 $all_success = 0;
+                push @errors, "$type: " . $self->_transport_error_text( $transport, 'upload' );
             }
         }
         else {
@@ -512,8 +546,10 @@ sub cronjob_nightly {
         $self->_add_cron_run_log({
             income_found => $income_found,
             invoices_found => $invoices_found,
-            status => 'failed'
+            status => 'failed',
+            message => join( '; ', @errors ),
         });
+        warn "Oracle plugin cronjob_nightly failed: " . join( '; ', @errors ) . "\n";
     }
 
     return $all_success;
@@ -556,7 +592,7 @@ sub report_step1 {
           { '-not_in' => [ keys %$submitted_invoices ] };
     }
     my $unsubmitted_invoices = Koha::Acquisition::Invoices->search( $inv_where,
-        { rows => 10, order_by => { -desc => 'me.closedate' } } );
+        { order_by => { -desc => 'me.closedate' } } );
 
     # 2. Unsubmitted Cashups
     my $submitted_cashups = $self->_get_submitted_cashup_ids();
@@ -567,7 +603,7 @@ sub report_step1 {
     }
     my $unsubmitted_cashups =
       Koha::Cash::Register::Cashups->search( {@cashup_where},
-        { rows => 10, order_by => { -desc => 'timestamp' } } );
+        { order_by => { -desc => 'timestamp' } } );
 
     my $last_run = $dbh->selectrow_hashref(
         'SELECT * FROM plugin_oracle_cron_runs
@@ -1865,13 +1901,35 @@ sub _add_cron_run_log {
     my $dbh = C4::Context->dbh;
     $dbh->do(
         'INSERT INTO plugin_oracle_cron_runs
-         (run_at, income_found, invoices_found, status)
-         VALUES (NOW(), ?, ?, ?)',
+         (run_at, income_found, invoices_found, status, message)
+         VALUES (NOW(), ?, ?, ?, ?)',
         undef,
         $args->{income_found}   // 0,
         $args->{invoices_found} // 0,
-        $args->{status}         // 'success'
+        $args->{status}         // 'success',
+        $args->{message},
     );
+}
+
+=head3 _transport_error_text
+
+Returns a one-line description of the last error on a transport, reusing the
+extractor the upload API endpoint uses.
+
+=cut
+
+sub _transport_error_text {
+    my ( $self, $transport, $operation ) = @_;
+
+    require Koha::Plugin::Com::OpenFifth::Oracle::UploadController;
+    my $e = eval {
+        Koha::Plugin::Com::OpenFifth::Oracle::UploadController->_extract_transport_error( $transport, $operation );
+    } || { operation => $operation, message => 'Unknown error' };
+
+    my $text = "$e->{operation} failed: $e->{message}";
+    $text .= " (path $e->{path})" if defined $e->{path};
+    $text .= " [status $e->{status_code}]" if defined $e->{status_code};
+    return $text;
 }
 
 sub manage_submissions {

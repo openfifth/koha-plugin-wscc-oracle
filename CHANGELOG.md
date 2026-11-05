@@ -8,9 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Failed nightly runs now record why: the transport error text (connect, change directory or upload) is stored in a new `message` column on `plugin_oracle_cron_runs` (added by `upgrade`/`install`), shown beside "Failed" on the report page, and written to stderr for cron mail. A missing or unconfigured transport is now logged as a failed run instead of returning silently.
 - Configuration changes are now written to Koha's action log (module `ORACLE_PLUGIN`, action `MODIFY`, visible in Tools > Log viewer). Each entry records the user and a JSON diff of old/new values for only the settings that changed; fund and vendor mapping tables are diffed per entry, and the transport name is included for readability. Saves that change nothing are not logged.
 
 ### Fixed
+- Records from failed nightly runs are now retried: the run window reaches back to the last successful run (at most 30 days) instead of only the previous scheduled day. Submitted records are still excluded, so no duplicates.
+- The "gaps detected" counts on the report page were capped at 10 by a row limit; they now show the real number.
 - **Transport silently reset on save**: the Transport fieldset is `disabled` in the form when Output is "Local file", and browsers don't submit disabled controls, so saving the page in that mode stored an empty `transport_server` and upload directories (the same happened if no transports existed at the time). Switching back to "Upload" then showed "-- None --". Settings absent from the POST are now left untouched; an explicitly submitted empty value (choosing "-- None --") still clears them.
 - Removed the `maximum_version` cap from plugin metadata. Koha's plugins page compares it as a string against the `Version` preference, so any 25.11.x point release (e.g. 25.11.05.x) sorted above `25.11.00.000` and still showed "written for an older version of Koha".
 

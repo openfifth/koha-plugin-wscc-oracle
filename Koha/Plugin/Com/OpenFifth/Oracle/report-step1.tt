@@ -46,6 +46,7 @@
                             [% END %]
                         [% ELSE %]
                             <span class="text-danger">Failed</span>
+                            [% IF last_run.message %]: <span class="text-danger">[% last_run.message | html %]</span>[% END %]
                         [% END %])
                         </p>
                         

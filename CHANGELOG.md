@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **EDI VAT Correction never ran**: `edi_cron.pl` passes `edifact_messages` ids in the `after_edi_cron` payload (`invoice_ids`), but the hook looked them up as `aqinvoices.invoiceid`. Message ids run ahead of invoice ids, so for recent messages nothing matched and no `[Tax Correction]` adjustment was ever raised. The hook now resolves message ids to invoices via `aqinvoices.message_id` (new `EdiVatCorrector::run_for_message_ids`). Invoices imported before this fix are not corrected retrospectively. New test `t/03-edi-vat-hook.t`; `t/02-edi-vat-corrector.t` gains a case for Askews partial-VAT lines with a bundled zero-rated servicing charge (`MOA+124`/`MOA+125`, `ALC+C`/`MOA+8`).
+
 ## [0.6.2] - 2026-11-05
 
 ### Added

@@ -3,11 +3,13 @@
 # cronjob_nightly must:
 #  - record *why* a run failed (transport error text) in plugin_oracle_cron_runs.message
 #  - record a failed run when the configured transport is missing
-#  - reach back to the last successful run so failed runs are retried
+#  - NOT widen its window to retry earlier failures automatically (those are
+#    reviewed and uploaded manually)
+#  - label historic failed runs that predate failure logging
 #  - leave the run log clean (no message) on success
 
 use Modern::Perl;
-use Test::More tests => 9;
+use Test::More tests => 10;
 use Test::MockModule;
 
 my $plugin_dir = $ENV{KOHA_PLUGIN_DIR} || '.';
@@ -25,6 +27,14 @@ my $plugin = Koha::Plugin::Com::OpenFifth::Oracle->new;
 $plugin->install;
 my $dbh = C4::Context->dbh;
 ok( $dbh->selectrow_arrayref(q{SHOW COLUMNS FROM plugin_oracle_cron_runs LIKE 'message'}), 'cron run table has a message column' );
+
+# Historic failed runs get an explanatory message on upgrade
+$dbh->do(q{DELETE FROM plugin_oracle_cron_runs});
+$dbh->do(q{INSERT INTO plugin_oracle_cron_runs (run_at, income_found, invoices_found, status) VALUES (NOW(), 0, 1, 'failed')});
+$dbh->do(q{INSERT INTO plugin_oracle_cron_runs (run_at, income_found, invoices_found, status) VALUES (NOW(), 0, 1, 'success')});
+$plugin->upgrade;
+is( $dbh->selectrow_array(q{SELECT message FROM plugin_oracle_cron_runs WHERE status = 'failed'}) =~ /predates failure logging/ ? 1 : 0, 1, 'historic failed run explained on upgrade' );
+is( $dbh->selectrow_array(q{SELECT COUNT(*) FROM plugin_oracle_cron_runs WHERE status = 'success' AND message IS NOT NULL}), 0, 'successful runs untouched' );
 
 my $schema = Koha::Database->new->schema;
 $schema->storage->txn_begin;
@@ -95,18 +105,12 @@ $plugin->cronjob_nightly;
 $run = last_run();
 like( $run->{message}, qr/no longer exists/, 'missing transport recorded as a failed run' );
 
-# --- retry reaches back to last successful run -----------------------------
+# --- a failed history does not widen the window ------------------------------
 my $ten_days_ago = dt_from_string()->subtract( days => 10 );
 $plugin->store_data( { last_cron_run => $ten_days_ago->strftime('%Y-%m-%d 02:00:00') } );
 $transport = FakeTransport->new(1);
 @windows = ();
 ok( $plugin->cronjob_nightly, 'run succeeds with a working transport' );
-is( $windows[0][0], $ten_days_ago->ymd, 'window starts at the last successful run' );
-
-# --- but never further than 30 days ---------------------------------------
-$plugin->store_data( { last_cron_run => dt_from_string()->subtract( days => 90 )->strftime('%Y-%m-%d 02:00:00') } );
-@windows = ();
-$plugin->cronjob_nightly;
-is( $windows[0][0], dt_from_string()->subtract( days => 30 )->ymd, 'window is capped at 30 days' );
+is( $windows[0][0], dt_from_string()->subtract( days => 1 )->ymd, 'window is only the normal scheduled window, not widened to the last success' );
 
 $schema->storage->txn_rollback;

@@ -70,13 +70,15 @@
                         <p>The following records from the last 30 days have not been marked as submitted:</p>
                         <ul>
                             [% IF unsubmitted_inv_count > 0 %]
-                                <li><strong>[% unsubmitted_inv_count | html %]</strong> unsubmitted invoices found.</li>
+                                <li><strong>[% unsubmitted_inv_count | html %]</strong> unsubmitted invoices found, the oldest dated [% oldest_unsubmitted_invoice | html %].
+                                    <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=report&amp;type=invoices&amp;startdate=[% oldest_unsubmitted_invoice | uri %]&amp;enddate=[% gap_enddate | uri %]">Review and upload manually</a></li>
                             [% END %]
                             [% IF unsubmitted_cs_count > 0 %]
-                                <li><strong>[% unsubmitted_cs_count | html %]</strong> unsubmitted cashup sessions found.</li>
+                                <li><strong>[% unsubmitted_cs_count | html %]</strong> unsubmitted cashup sessions found, the oldest dated [% oldest_unsubmitted_cashup | html %].
+                                    <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=report&amp;type=income&amp;startdate=[% oldest_unsubmitted_cashup | uri %]&amp;enddate=[% gap_enddate | uri %]">Review and upload manually</a></li>
                             [% END %]
                         </ul>
-                        <p>You can view already submitted records in the <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | html %]&method=tool">Submission Manager</a>.</p>
+                        <p>The nightly run does not retry these automatically. Review each set with the links above (the report preview lets you check the records before using <em>Upload to SFTP</em>), or view already submitted records in the <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | html %]&method=tool">Submission Manager</a>.</p>
                     </div>
                 [% END %]
 
@@ -107,8 +109,8 @@
                             <li>
                                 <label for="type">Report type:</label>
                                 <select name="type">
-                                    <option value="invoices">Invoices</option>
-                                    <option value="income">Income</option>
+                                    <option value="invoices"[% IF type == 'invoices' %] selected[% END %]>Invoices</option>
+                                    <option value="income"[% IF type == 'income' %] selected[% END %]>Income</option>
                                 </select>
                             </li>
                             <li>

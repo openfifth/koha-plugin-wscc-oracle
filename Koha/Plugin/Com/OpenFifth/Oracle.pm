@@ -126,7 +126,17 @@ sub uninstall {
 
 sub upgrade {
     my ($self) = @_;
-    return $self->install();
+    $self->install();
+
+    # Runs that failed before failure reasons were recorded cannot be
+    # explained after the fact; say so rather than leaving a bare "Failed".
+    C4::Context->dbh->do(
+        q{UPDATE plugin_oracle_cron_runs SET message = ?
+          WHERE status = 'failed' AND message IS NULL},
+        undef,
+        'Reason not recorded (run predates failure logging). Check the cron output for that date.'
+    );
+    return 1;
 }
 
 =head3 after_edi_cron
@@ -440,20 +450,6 @@ sub cronjob_nightly {
     my $start_date = $today_dt->clone->subtract( days => $days_since_prev );
     my $end_date   = $today_dt->clone->subtract( days => 1 );
 
-    # Self-heal after failures: if the last *successful* run is older than
-    # the normal window start, reach back to it (at most 30 days) so records
-    # from failed runs are retried. Already-submitted records are excluded
-    # by _generate_report, so this cannot produce duplicates.
-    if ( my $last_ok = $self->retrieve_data('last_cron_run') ) {
-        my $last_ok_dt = eval { dt_from_string( $last_ok ) };
-        if ($last_ok_dt) {
-            $last_ok_dt->truncate( to => 'day' );
-            my $floor = $today_dt->clone->subtract( days => 30 );
-            $last_ok_dt = $floor->clone if $last_ok_dt < $floor;
-            $start_date = $last_ok_dt    if $last_ok_dt < $start_date;
-        }
-    }
-
     # Generate both income and invoices reports
     my @report_types = ( 'income', 'invoices' );
     my $all_success  = 1;
@@ -591,8 +587,7 @@ sub report_step1 {
         $inv_where->{'me.invoicenumber'} =
           { '-not_in' => [ keys %$submitted_invoices ] };
     }
-    my $unsubmitted_invoices = Koha::Acquisition::Invoices->search( $inv_where,
-        { order_by => { -desc => 'me.closedate' } } );
+    my $unsubmitted_invoices = Koha::Acquisition::Invoices->search($inv_where);
 
     # 2. Unsubmitted Cashups
     my $submitted_cashups = $self->_get_submitted_cashup_ids();
@@ -602,8 +597,16 @@ sub report_step1 {
           ( id => { '-not_in' => [ keys %$submitted_cashups ] } );
     }
     my $unsubmitted_cashups =
-      Koha::Cash::Register::Cashups->search( {@cashup_where},
-        { order_by => { -desc => 'timestamp' } } );
+      Koha::Cash::Register::Cashups->search( {@cashup_where} );
+
+    # Oldest unsubmitted record of each kind, so the gap alert can link
+    # straight into a manual run covering them.
+    my $oldest = sub {
+        my ( $rs, $column ) = @_;
+        my ($min) = sort grep { defined } $rs->_resultset->get_column($column)->all;
+        return $min ? substr( $min, 0, 10 ) : undef;
+    };
+    my $tomorrow = dt_from_string()->add( days => 1 )->ymd;
 
     my $last_run = $dbh->selectrow_hashref(
         'SELECT * FROM plugin_oracle_cron_runs
@@ -627,6 +630,10 @@ sub report_step1 {
         unsubmitted_cashups   => $unsubmitted_cashups,
         unsubmitted_inv_count => $unsubmitted_invoices->count,
         unsubmitted_cs_count  => $unsubmitted_cashups->count,
+        oldest_unsubmitted_invoice => $oldest->( $unsubmitted_invoices, 'me.closedate' ),
+        oldest_unsubmitted_cashup  => $oldest->( $unsubmitted_cashups,  'me.timestamp' ),
+        gap_enddate           => $tomorrow,
+        type                  => scalar $cgi->param('type'),
     );
 
     $self->output_html( $template->output() );

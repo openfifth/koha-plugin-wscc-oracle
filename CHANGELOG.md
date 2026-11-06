@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Nightly runs no longer retry earlier failures automatically** (reverts the 0.7.0 reach-back to the last successful run). Backlog uploads are now a deliberate manual step.
+- The report page's "gaps detected" alert now shows the date of the oldest unsubmitted invoice/cashup and a "Review and upload manually" link that opens the report form pre-filled with that range and report type. The existing preview and *Upload to SFTP* button then upload and mark the records as submitted.
+
+### Fixed
+- Failed runs recorded before 0.7.0 are labelled "Reason not recorded (run predates failure logging)" on upgrade instead of showing a bare "Failed".
+
 ## [0.7.0] - 2026-11-05
 
 ### Added

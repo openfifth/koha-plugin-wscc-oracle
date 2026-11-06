@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-06
+
 ## [0.8.0] - 2026-11-06
 
 ### Changed
@@ -62,7 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace stray `plugins_rbkc_oracle` body id copy-paste leftovers in the configure, report-step1 and report-step2 templates with the correct `plugins_wscc_oracle` id
 - Metadata `maximum_version` was still capped at `25.05.00.000`, triggering an "outdated plugin" warning on the plugins page now WSCC is on 25.11.o5th; raised to `25.11.00.000`
 
-[Unreleased]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/openfifth/koha-plugin-wscc-oracle/compare/v0.6.2...v0.6.3

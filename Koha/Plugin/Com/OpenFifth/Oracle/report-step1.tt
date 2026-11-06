@@ -93,12 +93,12 @@
                         <ol>
                             <li>
                                 <label for="from" class="required"> Dated on or after:</label>
-                                <input type="text" size="10" id="from" name="from" value="[% startdate | $KohaDates date_format => 'iso' %]" class="flatpickr" data-date_to="to" required="required"/>
+                                <input type="text" size="10" id="from" name="from" value="[% startdate | $KohaDates dateformat => 'iso' %]" class="flatpickr" data-date_to="to" required="required"/>
                                 <span class="required">Required</span>
                             </li>
                             <li>
                                 <label for="to" class="required"> Dated before:</label>
-                                <input type="text" size="10" id="to" name="to" value="[% enddate | $KohaDates date_format => 'iso' %]" class="flatpickr" required="required"/>
+                                <input type="text" size="10" id="to" name="to" value="[% enddate | $KohaDates dateformat => 'iso' %]" class="flatpickr" required="required"/>
                                 <span class="required">Required</span>
                             </li>
                         </ol>

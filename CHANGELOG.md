@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The report page's "gaps detected" alert now shows the date of the oldest unsubmitted invoice/cashup and a "Review and upload manually" link that opens the report form pre-filled with that range and report type. The existing preview and *Upload to SFTP* button then upload and mark the records as submitted.
 
 ### Fixed
+- Report form date fields ignored pre-filled dates (from the "Review and upload manually" links and the results-page breadcrumb) and fell back to the default. The template passed `date_format => 'iso'` to `KohaDates`, whose option is `dateformat`, so inputs held system-preference-format dates that Koha's date picker cannot parse.
 - Failed runs recorded before 0.7.0 are labelled "Reason not recorded (run predates failure logging)" on upgrade instead of showing a bare "Failed".
 
 ## [0.7.0] - 2026-11-05
